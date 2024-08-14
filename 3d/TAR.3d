@@ -1,0 +1,25 @@
+#define M 2
+#define V 3
+#define One 1
+
+casetype _file_type (UINT8 size) {
+  switch(size) {
+    case M:  UINT8  value8;
+    case V: UINT16 value16;
+    case One: UINT32 value32;
+  }
+} file_type;
+
+entrypoint typedef struct _header {
+  UINT16 filename;
+  UINT16 filemode;
+  UINT8 uid;
+  UINT8 gid;
+  UINT16 filesize;
+  UINT16 lastmodtime;
+  UINT8 checksum;
+  UINT8 indicator;
+  UINT16 linkpath;
+  file_type(indicator) result;
+  UINT32 f[:byte-size filesize];
+} header;
