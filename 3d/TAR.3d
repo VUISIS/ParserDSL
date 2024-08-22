@@ -1,25 +1,48 @@
-#define M 2
-#define V 3
-#define One 1
+typedef struct _TarHeader {
+    UINT8 name[100];
+    UINT8 mode[8];
+    UINT8 uid[8];
+    UINT8 gid[8];
+    UINT8 size[12];
+    UINT8 mtime[12];
+    UINT8 checksum[8];
+    UINT8 typeflag;
+    UINT8 linkname[100];
+    UINT8 magic[6];
+    UINT8 version[2];
+    UINT8 uname[32];
+    UINT8 gname[32];
+    UINT8 devmajor[8];
+    UINT8 devminor[8];
+    UINT8 prefix[155];
+    UINT8 pad[12]; // Padding to make the total size 512 bytes
+} TarHeader;
 
-casetype _file_type (UINT8 size) {
-  switch(size) {
-    case M:  UINT8  value8;
-    case V: UINT16 value16;
-    case One: UINT32 value32;
-  }
-} file_type;
+typedef struct _TarHeaderWithChecksum {
+    TarHeader header;
+    UINT32 checksum; 
+    //{
+    //    checksum == calculate_checksum(header)
+    //};
+} TarHeaderWithChecksum;
 
-entrypoint typedef struct _header {
-  UINT16 filename;
-  UINT16 filemode;
-  UINT8 uid;
-  UINT8 gid;
-  UINT16 filesize;
-  UINT16 lastmodtime;
-  UINT8 checksum;
-  UINT8 indicator;
-  UINT16 linkpath;
-  file_type(indicator) result;
-  UINT32 f[:byte-size filesize];
-} header;
+// TODO: Find a way to write constraints for checksum or add external functions.
+//function UINT32 calculate_checksum(TarHeader header) {
+    // Implement the checksum calculation logic
+//}
+
+entrypoint typedef struct _TarFile {
+    TarHeaderWithChecksum checkedheader;
+    // UINT8 data[:byte-size checkedheader.header.size]; 
+    /*{
+        // Define actions for extracting file data
+        on-success {
+            var filename = header.name;
+            var filedata = data;
+            extract_file(filename, filedata);
+            return true;
+        }
+    };*/
+} TarFile;
+
+//extern void extract_file(UINT8* filename, UINT8* data);
