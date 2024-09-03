@@ -35,3 +35,6 @@
 **/TAR
 **/everparse
 **/output
+
+# Environmental variables
+.env
