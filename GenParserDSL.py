@@ -31,7 +31,7 @@ def call_openai_api(system_contents=[], assistant_contents=[], user_contents=[])
         response = client.chat.completions.create(
             model="gpt-4o", # GPT-4o has 30,000 TPM
             messages=messages,
-            max_tokens=10000,
+            max_tokens=4096,
             stop=None,
             temperature=0.7
         )
@@ -58,25 +58,43 @@ def process_large_text(text, chunk_size=2000):
 
 
 if __name__ == "__main__":
-    text_3d_lang_specs = read_file_into_text("./3d-lang.rst")
-    text_untar_code = read_file_into_text("./untar.c")
+    text_3d_lang_specs = read_file_into_text("./data/3d-lang.rst")
+    text_untar_latest = read_file_into_text("./data/untar.c")
+    text_untar_negsize = read_file_into_text("./data/untar_negsize.c")
+    text_untar_negsize_fixed = read_file_into_text("./data/untar_negsize_fixed.c")
 
-    extract_dsl_question = "Understand the 3D language specification and extract the C code into The 3d Dependent Data Description language"
+    extract_dsl_question = "Understand the 3D language specification and extract the C code into \
+        The 3d Dependent Data Description language"
+    extract_dsl_question2 = "Understand the 3D language specification and extract the C code into \
+        The 3d Dependent Data Description language for both untar_negsize.c and untar_negsize_fixed.c"
+    
     texts = [
         text_3d_lang_specs, 
-        text_untar_code, 
+        text_untar_latest, 
         extract_dsl_question
     ]
 
     # result = process_large_text("\n".join(texts), chunk_size=10000)
+
+    # result = call_openai_api(
+    #     # System role
+    #     ["Read and learn the following 3D language documentation: " + text_3d_lang_specs, 
+    #      "Read and understand the following code in C language: " + text_untar_latest], 
+    #     # Assistant role
+    #     [], 
+    #     # User role
+    #     [extract_dsl_question])
+    
     result = call_openai_api(
-        # System role
         ["Read and learn the following 3D language documentation: " + text_3d_lang_specs, 
-         "Read and understand the following code in C language: " + text_untar_code], 
-        # Assistant role
-        [], 
-        # User role
-        [extract_dsl_question])
+         "Read and understand the following code in untar_negsize.c: " + text_untar_negsize, 
+         "Read and understand the following code in untar_negsize_fixed.c: " + text_untar_negsize_fixed],
+        [],
+        [
+            # "Find the difference between the two files untar_negsize.c and untar_negsize_fixed.c"
+            extract_dsl_question2
+        ]
+    )
 
     print(result)
 
