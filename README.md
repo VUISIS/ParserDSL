@@ -10,6 +10,8 @@ cd 3d
 tar xvf everparse_your_version
 ```
 
+Please note that the binary files only work for Windows and Linux, you have to build from source for MacOS. It is not recommended to build on MacOS but you can do that by following the official build [tutorial](https://project-everest.github.io/everparse/build.html). Make sure that OCaml version is 4.14.x and z3 version is exactly 4.8.5 otherwise the building will fail.
+
 ## Parser generation from 3D specs
 ```
 cd everparse
