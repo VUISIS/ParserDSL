@@ -1,6 +1,9 @@
-from openai import OpenAI
 import os
+import sys
 from datetime import datetime
+
+from openai import OpenAI
+from PyPDF2 import PdfReader
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -56,6 +59,32 @@ def process_large_text(text, chunk_size=2000):
     response = call_openai_api(system_contents=chunks)
     return response
 
+def untar_code_extraction(text_3d_lang_specs, text_untar_latest):
+    text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
+    text_formula_documentation = []
+    reader = PdfReader("./data/formula.pdf")
+    for page in reader.pages:
+        text_formula_documentation.append(page.extract_text())
+
+    question = "Summarize the c code untar_latest.c in pseudo code"
+    question2 = "Understand the c code untar_latest.c and rewrite it in Prolog language"
+    question3 = "Understand the c code untar_latest.c and rewrite it in FORMULA language"
+    question4 = "Understand the c code untar_latest.c and rewrite it in state machine"
+
+    result = call_openai_api(
+        # System role
+        # text_formula_documentation + 
+        [
+            # "Read and understand FORMULA documentation" + text_formula_simple_documentation,
+            "Read and understand the following code in C language: " + text_untar_latest
+        ], 
+        # Assistant role
+        [], 
+        # User role
+        [question4]
+    )
+    return result
+
 def extract_dsl_into_3d(text_3d_lang_specs, text_untar_latest):
     extract_dsl_question = "Understand the 3D language specification and extract the C code into \
         The 3d Dependent Data Description language"
@@ -68,7 +97,8 @@ def extract_dsl_into_3d(text_3d_lang_specs, text_untar_latest):
         # Assistant role
         [], 
         # User role
-        [extract_dsl_question])
+        [extract_dsl_question]
+    )
     return result
     
 
@@ -115,13 +145,40 @@ def fix_cve_2017_12378(text_3d_lang_specs, text_untar_latest):
     )
     return result
 
+def create_formula_parser_domain(text_3d_lang_specs, text_untar_latest):
+    text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
+    text_formula_documentation = []
+    reader = PdfReader("./data/formula.pdf")
+    for page in reader.pages:
+        text_formula_documentation.append(page.extract_text())
+
+    question0 = "Summarize the FORMULA documentation with examples"
+    
+    question1 = "Understand the formula documentation and write a FORMULA domain for a generic data format parser"
+    
+    question2 = "Understand the formula documentation and write a FORMULA domain for a data format parser that has \
+        two pointers moving forward when reading and transforming data"
+    
+    question3 = "Understand the formula documentation and 3D language specification, \
+        Write a FORMULA domain to model 3D language"
+ 
+    result = call_openai_api(
+        # text_formula_documentation, 
+        [text_formula_simple_documentation, text_3d_lang_specs],
+        [], 
+        [question3]
+    )
+    return result
+
 if __name__ == "__main__":
     text_3d_lang_specs = read_file_into_text("./data/3d-lang.rst")
     text_untar_latest = read_file_into_text("./data/untar.c")
 
+    result = untar_code_extraction(text_3d_lang_specs, text_untar_latest)
     # result = extract_dsl_into_3d(text_3d_lang_specs, text_untar_latest)
     # result = fix_cve_2009_1270(text_3d_lang_specs, text_untar_latest)
-    result = fix_cve_2017_12378(text_3d_lang_specs, text_untar_latest)
+    # result = fix_cve_2017_12378(text_3d_lang_specs, text_untar_latest)
+    # result = create_formula_parser_domain(text_3d_lang_specs, text_untar_latest)
 
     print(result) 
 
