@@ -1,0 +1,124 @@
+### FORMULA 2.0: A Language for Formal Specifications
+
+#### Overview
+FORMULA 2.0 is a formal specification language designed for succinctly specifying domain-specific abstractions and compilers, efficient reasoning and compilation of input programs, and facilitating diverse synthesis and fast verification. It uses strongly-typed open-world logic programs and behavioral types.
+
+#### Key Concepts
+
+1. **Data and Types:**
+    - **Constants:** Basic data types like integers, fractions, decimal fractions, and strings.
+    - **Data Constructors:** Functions that create complex data values from simpler ones.
+    - **Ordering of Values:** Values are lexicographically ordered.
+    - **Data Types and Subtyping:** Types are expressions representing sets of values, with subtyping relationships determined by set inclusion.
+    - **Type Declarations:** Introduce new data constructors and user-defined constants. Types can be aliased for simplicity.
+
+2. **Domains and Models:**
+    - **Domains:** Describe classes of things (e.g., all possible graphs).
+    - **Models:** Represent specific instances of those things (e.g., a particular graph).
+    - **Querying Models:** Allows testing if certain properties are provable within a model.
+    - **Model Conformance:** Ensures that models adhere to domain constraints.
+  
+3. **Rules and Domain Constraints:**
+    - **Derived Constants:** Computed properties of models.
+    - **Rule Bodies:** Conjunctions of constraints (matching constraints and interpreted predicates).
+    - **Set Comprehensions:** Aggregate provable values into sets.
+    - **General Rules:** Prove multiple heads from a single body.
+    - **Complex Conformance Constraints:** Use rules to define detailed constraints for domain conformance.
+
+4. **Interpreted Functions:**
+    - Arithmetic functions (e.g., addition, multiplication).
+    - Boolean functions (e.g., AND, OR).
+    - String functions (e.g., substring operations).
+    - List functions (e.g., reversing a list).
+    - Coercion functions (e.g., converting values to lists or strings).
+    - Reflection functions (e.g., querying type information).
+
+5. **Composition:**
+    - **Namespaces:** Organize symbols within modules.
+    - **Domain Composition:** Combine multiple domains into a new domain.
+    - **Model Composition:** Combine sets of assertions and aliases into a new model.
+    - **Renaming Operator:** Create distinct instances of domains or models by renaming constructors.
+
+### Examples
+
+1. **Defining Integer-Labeled Graphs:**
+
+```formula
+domain IntGraphs {
+    V ::= new (lbl: Integer).
+    E ::= new (src: V, dst: V).
+}
+
+model Gex of IntGraphs {
+    V(1).
+    V(2).
+    V(100).
+    E(V(1), V(2)).
+    E(V(100), V(100)).
+}
+```
+
+2. **Querying Models:**
+
+```plaintext
+query Gex V(1)
+```
+
+3. **Defining Relational Trees:**
+
+```formula
+domain RelTrees {
+    V ::= new (lbl: Integer).
+    Parent ::= fun (chld: V => cxt: any {ROOT} + Context).
+    Context ::= new (childPos: {LFT, RT}, prnt: V).
+}
+
+model Fex of RelTrees {
+    V(1). V(2). V(3).
+    Parent(V(1), ROOT).
+    Parent(V(2), Context(LFT, V(1))).
+    Parent(V(3), Context(RT, V(1))).
+}
+```
+
+4. **Using Set Comprehensions:**
+
+```formula
+indeg(v, k) :- v is V, k = count({e | e is E(_, v)}).
+source(v) :- v is V, no {e | e is E(_, v)}.
+```
+
+5. **Creating a Domain with Constraints:**
+
+```formula
+domain DAGs {
+    V ::= new (lbl: Integer).
+    E ::= new (src: V, dst: V).
+    path ::= (V, V).
+    path(u, w) :- E(u, w); E(u, v), path(v, w).
+    conforms no path(u, u).
+}
+```
+
+6. **Defining Isomorphic DAGs:**
+
+```formula
+domain IsoDAGs extends Left::DAGs, Right::DAGs {
+    Iso ::= bij (Left.V => Right.V).
+    conforms no {e | e is Left.E(u, w), Iso(u, u'), Iso(w, w'), no Right.E(u', w')}.
+    conforms no {e | e is Right.E(u', w'), Iso(u, u'), Iso(w, w'), no Left.E(u, w)}.
+}
+
+model LittleIso of IsoDAGs {
+    v1L is Left.V(1).
+    v2L is Left.V(2).
+    v1R is Right.V(1).
+    v2R is Right.V(2).
+    Left.E(v1L, v2L).
+    Right.E(v2R, v1R).
+    Iso(v1L, v2R).
+    Iso(v2L, v1R).
+}
+```
+
+These examples showcase the core features of FORMULA 2.0, demonstrating how to define, query, and enforce constraints on data structures and domains.
