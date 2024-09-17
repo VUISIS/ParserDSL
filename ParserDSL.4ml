@@ -1,16 +1,21 @@
-domain Parser {
+// Parser Abstraction
+// 1. A while loop in which a pointer points to current read and keeps moving forward towards the end.
+// 2. Variables for storing intermediate results such as a counter.
+// 3. Case switching based on the content at current pointer and other intermediate results to decide the length 
+// of the next read.
+// 4. Transform, update and output the current read and intermediate results.
 
-    // Parser Abstraction
-    // 1. A while loop in which a pointer points to current read and keeps moving forward towards the end.
-    // 2. Variables for storing intermediate results such as a counter.
-    // 3. Case switching based on the content at current pointer and other intermediate results to decide the length 
-    // of the next read.
-    // 4. Transform, update and output the current read and intermediate results.
+// The next read might be determined by the value of current read and other intermediate values. 
+// For example, TAR parser is different from regex and programming language parser that parse linearly.
+// The first read of 64 bytes could be an integer as `x` and the next read will consume the next `x` blocks. 
 
-    // The next read might be determined by the value of current read and other intermediate values. 
-    // For example, TAR parser is different from regex and programming language parser that parse linearly.
-    // The first read of 64 bytes could be an integer as `x` and the next read will consume the next `x` blocks. 
+// Some random thoughts:
+// Should we model in one of the following ways:
+// 1. the behavior of some C code such as two pointers moving forward when reading and transforming data.
+// 2. the high level representation of some data format with constraints such as in 3D.
+// The task of extracting C code into DSL is similar to translating an imperative C program to a Prolog program 
 
+domain GenericFormatParser {
     UnOp  ::= { LNOT,  BNOT, NEG,  POS,
                  ADDR,  DRF,  INC,  DEC,
                  INCAFTER, DECAFTER, ATOI }.
@@ -46,10 +51,9 @@ domain Parser {
     Stmts  ::= new (arg: any Stmt, tail: any Stmts + {NIL}).   
 
     NextRead ::= new (pos: Integer + {NIL}, len: Expr).
-
 }
 
-model CalcParser of Parser {
+model CalcParser of GenericFormatParser {
     number is Var("number", Val(0)).
     sign_value is Var("sign_value", Val(1)).
     result is Var("result", Val(0)).
@@ -61,5 +65,56 @@ model CalcParser of Parser {
     stmt2 is NextRead(NIL, Val(1)).
     body1 is Stmts(stmt1, Stmts(stmt2, NIL)).
     case1 is Case(cond1, body1).
-     
+}
+
+// Are we trying to validate if the input data is correct rather than if the parser is correct?
+// 
+// How generic should the parser DSL be? How much details of the TAR parser should be included in DSL?
+//
+// Goal: Extract the legacy C code into our parser DSL and use the DSL to find out there are bugs 
+// in the legacy code such as the infinite loop and negative size in the header. The parser DSL should
+// be able to be applied to other languages such as JSON, XML, etc.
+//
+// We should assume we don't know beforehand that the size in the header can't be negative and use the
+// symbolic execution to find out that the negative size will violate the constraints.
+// 
+// One possible way to model the TAR parser is to use state machines and GPT can rewrites the legacy C
+// code into a state machine-based new implementation in C.
+domain Parser
+{
+  Header ::= new (name: Integer, size: Integer).
+  Offset ::= new (name: Integer, pos: Integer).
+  Start  ::= new (name: Integer).
+  Done  ::= new (name: Integer, seq: Integer).
+
+  Done(nextName, 0) :- s is Start(currName), 
+                          currHeader is Header(currName, size),
+                          currOffset is Offset(currName, pos),
+                          nextPos = pos + size + 512,
+                          nextOffset is Offset(nextName, nextPos).
+                          
+  Done(nextName, nextSeq) :- s is Done(currName, seq), nextSeq = seq + 1,
+                          currHeader is Header(currName, size),
+                          currOffset is Offset(currName, pos),
+                          nextPos = pos + size + 512,
+                          nextOffset is Offset(nextName, nextPos).
+
+  badHeader :- h is Header, h.size < 0.
+
+  // Must have exactly one StartHeader
+  tooManyDone :- h is Header, name = h.name,
+                    count({d | d is Done(name, _)}) > 1. 
+  
+  conforms no tooManyDone, no badHeader.
+}
+
+partial model pm of Parser
+[solver_RecursionBound = 5]
+{
+  h1 is Header(100, 512).
+  h1Offset is Offset(100, 0).
+  Start(100).
+  
+  h2 is Header(101, x).
+  h2Offset is Offset(101, 1024).
 }
