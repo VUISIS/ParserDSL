@@ -1,5 +1,6 @@
 import os
 import sys
+from pprint import pprint
 from datetime import datetime
 
 from openai import OpenAI
@@ -24,12 +25,11 @@ def read_file_into_text(file_path):
         return None
 
 
-def call_openai_api(system_contents=[], assistant_contents=[], user_contents=[]):
+def ask_chatgpt(system_contents=[], assistant_contents=[], user_contents=[]):
     try:
         messages=[{ "role": "system", "content": system_content} for system_content in system_contents] + \
                 [{"role": "assistant", "content": assistant_content} for assistant_content in assistant_contents] + \
                 [{"role": "user", "content": user_content} for user_content in user_contents]
-        # print(messages)
 
         response = client.chat.completions.create(
             model="gpt-4o", # GPT-4o has 30,000 TPM
@@ -38,11 +38,56 @@ def call_openai_api(system_contents=[], assistant_contents=[], user_contents=[])
             stop=None,
             temperature=0.7
         )
-        print(response.choices)
+        # pprint(response)
         return response.choices[0].message.content
     except Exception as e:
         print(f"Error calling OpenAI API: {e}")
         return None
+    
+def ask_chatgpt_interactively(init_system_contents=[], init_assistant_contents=[], init_user_contents=[]):
+    system_contents = init_system_contents
+    assistant_contents = init_assistant_contents
+    user_contents = init_user_contents
+
+    chat_history = "Context: \n" + "\n".join(system_contents) + "\n" + \
+                   "Questions: \n" + "\n".join(user_contents) + "\n"
+ 
+    while True:
+        response = ask_chatgpt(
+            system_contents=system_contents,
+            assistant_contents=assistant_contents,
+            user_contents=user_contents
+        )
+
+        if response is not None:
+            chat_history += "Response: \n" + response + "\n"
+            print(response)
+
+        print("Type 'exit' or 'quit' to end the interactive prompt.")
+
+        user_prompt = input("Enter more question: ")
+        
+        if user_prompt.lower() in ["exit", "quit"]:
+            print("Goodbye!")
+            break
+        
+        user_contents.append(user_prompt)
+        chat_history += "Additional question: \n" + user_prompt + "\n"
+
+        if response is not None:
+            # Add the response to the assistant contents
+            assistant_contents.append(response)
+    
+    return chat_history
+
+def test_gpt_interactively():
+    user_prompt = input("Enter your first question: ")
+    chat_history = ask_chatgpt_interactively(
+        init_system_contents=[],
+        init_assistant_contents=[],
+        init_user_contents=[user_prompt]
+    )
+    return chat_history
 
 
 def process_large_text(text, chunk_size=2000):
@@ -56,8 +101,20 @@ def process_large_text(text, chunk_size=2000):
 
     # return "\n".join(responses)
 
-    response = call_openai_api(system_contents=chunks)
+    response = ask_chatgpt(system_contents=chunks)
     return response
+
+def utar_code_extraction_interactively():
+    text_untar_latest = read_file_into_text("./data/untar.c")
+
+    question = "Understand the c code untar.c and can we rewrite it in logic programming language?"
+    
+    chat_history = ask_chatgpt_interactively(
+        init_system_contents=[text_untar_latest],
+        init_assistant_contents=[],
+        init_user_contents=[question]
+    )
+    return chat_history
 
 def untar_code_extraction(text_3d_lang_specs, text_untar_latest):
     text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
@@ -66,22 +123,25 @@ def untar_code_extraction(text_3d_lang_specs, text_untar_latest):
     for page in reader.pages:
         text_formula_documentation.append(page.extract_text())
 
-    question = "Summarize the c code untar_latest.c in pseudo code"
-    question2 = "Understand the c code untar_latest.c and rewrite it in Prolog language"
-    question3 = "Understand the c code untar_latest.c and rewrite it in FORMULA language"
-    question4 = "Understand the c code untar_latest.c and rewrite it in state machine"
+    # Try to ask GPT interactively and let GPT tell you what information it needs
+    question = "Summarize the c code untar.c in pseudo code"
+    question2 = "Understand the c code untar.c and rewrite it in Prolog language"
+    question3 = "Understand the c code untar.c and rewrite it in FORMULA language"
+    question4 = "Understand the c code untar.c and rewrite it in state machine"
+    question5 = "Understand the c code untar.c and represent it in state machine"
+    question6 = "Understand parsing logic in untar.c and represent it in state machine, then convert it to FORMULA language"
 
-    result = call_openai_api(
+    result = ask_chatgpt(
         # System role
         # text_formula_documentation + 
         [
-            # "Read and understand FORMULA documentation" + text_formula_simple_documentation,
+            "Read and understand FORMULA documentation" + text_formula_simple_documentation,
             "Read and understand the following code in C language: " + text_untar_latest
         ], 
         # Assistant role
         [], 
         # User role
-        [question4]
+        [question6]
     )
     return result
 
@@ -90,7 +150,7 @@ def extract_dsl_into_3d(text_3d_lang_specs, text_untar_latest):
         The 3d Dependent Data Description language"
 
     # result = process_large_text("\n".join(texts), chunk_size=10000)
-    result = call_openai_api(
+    result = ask_chatgpt(
         # System role
         ["Read and learn the following 3D language documentation: " + text_3d_lang_specs, 
          "Read and understand the following code in C language: " + text_untar_latest], 
@@ -98,6 +158,17 @@ def extract_dsl_into_3d(text_3d_lang_specs, text_untar_latest):
         [], 
         # User role
         [extract_dsl_question]
+    )
+    return result
+
+
+def convert_c_to_prolog(text_3d_lang_specs, text_untar_latest):
+    question = "Convert the C code untar.c into Prolog language" 
+    question2 = "Convert the C code untar.c into FORMULA language"
+    result = ask_chatgpt(
+        ["Read and understand the following code in untar.c: " + text_untar_latest],
+        [],
+        [question]
     )
     return result
     
@@ -109,7 +180,7 @@ def fix_cve_2009_1270(text_3d_lang_specs, text_untar_latest):
     extract_dsl_question2 = "Understand the 3D language specification and extract the C code into \
         The 3d Dependent Data Description language for both untar_negsize.c and untar_negsize_fixed.c"
     
-    result = call_openai_api(
+    result = ask_chatgpt(
         ["Read and learn the following 3D language documentation: " + text_3d_lang_specs, 
          "Read and understand the following code in untar_negsize.c: " + text_untar_negsize, 
          "Read and understand the following code in untar_negsize_fixed.c: " + text_untar_negsize_fixed],
@@ -134,7 +205,7 @@ def fix_cve_2017_12378(text_3d_lang_specs, text_untar_latest):
         find the difference between untar_bb11946.c and untar_bb11946_fixed.c, \
         and extract the C code into The 3d Dependent Data Description language that fixes the bug."
     
-    result = call_openai_api(
+    result = ask_chatgpt(
         ["Read and learn the following 3D language documentation: " + text_3d_lang_specs, 
          "Read and understand the following code in untar_bb11946.c: " + text_untar_bb11946, 
          "Read and understand the following code in untar_bb11946_fixed.c: " + text_untar_bb11946_fixed],
@@ -162,7 +233,7 @@ def create_formula_parser_domain(text_3d_lang_specs, text_untar_latest):
     question3 = "Understand the formula documentation and 3D language specification, \
         Write a FORMULA domain to model 3D language"
  
-    result = call_openai_api(
+    result = ask_chatgpt(
         # text_formula_documentation, 
         [text_formula_simple_documentation, text_3d_lang_specs],
         [], 
@@ -174,11 +245,14 @@ if __name__ == "__main__":
     text_3d_lang_specs = read_file_into_text("./data/3d-lang.rst")
     text_untar_latest = read_file_into_text("./data/untar.c")
 
-    result = untar_code_extraction(text_3d_lang_specs, text_untar_latest)
+    # result = untar_code_extraction(text_3d_lang_specs, text_untar_latest)
     # result = extract_dsl_into_3d(text_3d_lang_specs, text_untar_latest)
     # result = fix_cve_2009_1270(text_3d_lang_specs, text_untar_latest)
     # result = fix_cve_2017_12378(text_3d_lang_specs, text_untar_latest)
     # result = create_formula_parser_domain(text_3d_lang_specs, text_untar_latest)
+    # result = convert_c_to_prolog(text_3d_lang_specs, text_untar_latest)
+
+    result = test_gpt_interactively()
 
     print(result) 
 
