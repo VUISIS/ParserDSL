@@ -49,8 +49,11 @@ def ask_chatgpt_interactively(init_system_contents=[], init_assistant_contents=[
     assistant_contents = init_assistant_contents
     user_contents = init_user_contents
 
-    chat_history = "Context: \n" + "\n".join(system_contents) + "\n" + \
-                   "Questions: \n" + "\n".join(user_contents) + "\n"
+    chat_history = "*" * 64 + "\n" + \
+                   "Context: \n" +   "\n++++++++++++++++++++++++++++++++\n".join(system_contents) + \
+                   "\n" + "*" * 64 + "\n" + \
+                   "Questions: \n" + "\n++++++++++++++++++++++++++++++++\n".join(user_contents) + \
+                   "\n" + "*" * 64 + "\n"
  
     while True:
         response = ask_chatgpt(
@@ -72,7 +75,9 @@ def ask_chatgpt_interactively(init_system_contents=[], init_assistant_contents=[
             break
         
         user_contents.append(user_prompt)
-        chat_history += "Additional question: \n" + user_prompt + "\n"
+        chat_history += "*" * 64 + "\n" + \
+                        "Additional question: \n" + user_prompt + "\n" + \
+                        "*" * 64 + "\n"
 
         if response is not None:
             # Add the response to the assistant contents
@@ -104,13 +109,30 @@ def process_large_text(text, chunk_size=2000):
     response = ask_chatgpt(system_contents=chunks)
     return response
 
-def utar_code_extraction_interactively():
-    text_untar_latest = read_file_into_text("./data/untar.c")
+def tar_in_prolog_to_formula():
+    text_prolog_code = read_file_into_text("./prolog/tar.pl")
+    text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
+    question = "Convert the Prolog code into FORMULA language"
+    result = ask_chatgpt(
+        [text_prolog_code, text_formula_simple_documentation],
+        [],
+        [question]
+    )
+    return result
 
-    question = "Understand the c code untar.c and can we rewrite it in logic programming language?"
+def untar_code_extraction_interactively():
+    text_untar_wrong = read_file_into_text("./data/untar_negsize.c")
+    text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
+    # Feeding the whole FORMULA PDF to GPT may exceed token limit but gives better results
+    text_formula_documentation = []
+    reader = PdfReader("./data/formula.pdf")
+    for page in reader.pages:
+        text_formula_documentation.append(page.extract_text())
+
+    question = "Understand the c code for tar parser and FORMULA documentation."
     
     chat_history = ask_chatgpt_interactively(
-        init_system_contents=[text_untar_latest],
+        init_system_contents=[text_untar_wrong] + text_formula_documentation,
         init_assistant_contents=[],
         init_user_contents=[question]
     )
@@ -251,10 +273,12 @@ if __name__ == "__main__":
     # result = fix_cve_2017_12378(text_3d_lang_specs, text_untar_latest)
     # result = create_formula_parser_domain(text_3d_lang_specs, text_untar_latest)
     # result = convert_c_to_prolog(text_3d_lang_specs, text_untar_latest)
+    # result = tar_in_prolog_to_formula()
 
-    result = test_gpt_interactively()
+    # result = test_gpt_interactively()
+    result = untar_code_extraction_interactively()
 
-    print(result) 
+    print(result)
 
     # Write the text to the file
     if result is not None:
