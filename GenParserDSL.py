@@ -11,6 +11,20 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 def split_text_into_chunks(text, chunk_size):
     return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
 
+def process_large_text(text, chunk_size=2000):
+    chunks = split_text_into_chunks(text, chunk_size)
+    responses = []
+
+    # for chunk in chunks:
+    #     response = call_openai_api(chunk)
+    #     if response:
+    #         responses.append(response)
+
+    # return "\n".join(responses)
+
+    response = ask_chatgpt(system_contents=chunks)
+    return response
+
 
 def read_file_into_text(file_path):
     try:
@@ -94,27 +108,34 @@ def test_gpt_interactively():
     )
     return chat_history
 
-
-def process_large_text(text, chunk_size=2000):
-    chunks = split_text_into_chunks(text, chunk_size)
-    responses = []
-
-    # for chunk in chunks:
-    #     response = call_openai_api(chunk)
-    #     if response:
-    #         responses.append(response)
-
-    # return "\n".join(responses)
-
-    response = ask_chatgpt(system_contents=chunks)
-    return response
-
 def tar_in_prolog_to_formula():
     text_prolog_code = read_file_into_text("./prolog/tar.pl")
     text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
     question = "Convert the Prolog code into FORMULA language"
     result = ask_chatgpt(
         [text_prolog_code, text_formula_simple_documentation],
+        [],
+        [question]
+    )
+    return result
+
+def generate_formula_core_parser_domain():
+    text_parser_abstract = """
+    Parser Abstraction
+    1. The current read and offset keep getting updated while moving forward until the end of the file in a while loop.
+    2. There are variables for storing the current read and intermediate results such as a counter.
+    3. Intermediate results are derived from the current read and other intermediate results by transforming and updating them.
+    4. Intermediate results decide how the pointers move forward.
+    """
+    text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
+    text_formula_documentation = []
+    reader = PdfReader("./data/formula.pdf")
+    for page in reader.pages:
+        text_formula_documentation.append(page.extract_text())
+
+    question = "Understand the FORMULA documentation and model a generic data format parser with dependent data type based on the parser abstraction"
+    result = ask_chatgpt_interactively(
+        [text_parser_abstract] + text_formula_documentation,
         [],
         [question]
     )
@@ -267,16 +288,18 @@ if __name__ == "__main__":
     text_3d_lang_specs = read_file_into_text("./data/3d-lang.rst")
     text_untar_latest = read_file_into_text("./data/untar.c")
 
-    # result = untar_code_extraction(text_3d_lang_specs, text_untar_latest)
+    # result = test_gpt_interactively()
+
     # result = extract_dsl_into_3d(text_3d_lang_specs, text_untar_latest)
     # result = fix_cve_2009_1270(text_3d_lang_specs, text_untar_latest)
     # result = fix_cve_2017_12378(text_3d_lang_specs, text_untar_latest)
     # result = create_formula_parser_domain(text_3d_lang_specs, text_untar_latest)
     # result = convert_c_to_prolog(text_3d_lang_specs, text_untar_latest)
     # result = tar_in_prolog_to_formula()
+    # result = untar_code_extraction(text_3d_lang_specs, text_untar_latest)
+    # result = untar_code_extraction_interactively()
 
-    # result = test_gpt_interactively()
-    result = untar_code_extraction_interactively()
+    result = generate_formula_core_parser_domain()
 
     print(result)
 
