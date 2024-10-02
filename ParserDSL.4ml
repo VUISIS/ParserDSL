@@ -1,86 +1,4 @@
-// Parser Abstraction
-// 1. A while loop in which a pointer points to current read and keeps moving forward towards the end.
-// 2. Variables for storing intermediate results such as a counter.
-// 3. Case switching based on the content at current pointer and other intermediate results to decide the length 
-// of the next read.
-// 4. Transform, update and output the current read and intermediate results.
-
-// The next read might be determined by the value of current read and other intermediate values. 
-// For example, TAR parser is different from regex and programming language parser that parse linearly.
-// The first read of 64 bytes could be an integer as `x` and the next read will consume the next `x` blocks. 
-
-// Some random thoughts:
-// Should we model in one of the following ways:
-// 1. the behavior of some C code such as two pointers moving forward when reading and transforming data.
-// 2. the high level representation of some data format with constraints such as in 3D.
-// The task of extracting C code into DSL is similar to translating an imperative C program to a Prolog program 
-
-domain GenericFormatParser {
-    UnOp  ::= { LNOT,  BNOT, NEG,  POS,
-                 ADDR,  DRF,  INC,  DEC,
-                 INCAFTER, DECAFTER, ATOI }.
-    
-    BinOp ::= { ADD,   SUB,  DIV,   MUL, MOD, 
-                 LAND,  LOR,  BAND,  BOR, BXOR,
-                 RT,    LFT,  CMA,   FLD,
-                 PFLD,  LT,   LE,    GT,  
-                 GE,    EQ,   NEQ,   AAC }.
-
-    Literal ::= Integer + String + Var + Val.
-
-    // TODO: Add dictionary if dict has to be used in a parser.
-    // A variable has a name and contain Integer, String or a list 
-    Var ::= new (name: String, val: Val + Vals).
-    Vars ::= new (var: Var, tail: any Vars + {NIL}).
-
-    Val  ::= new (val: String + Integer).
-    Vals ::= new (arg: Val, tail: any Vals + { NIL }).
-
-    List ::= new (name: String, list: Vals + { NIL}).
-
-    Case   ::= new (condition: any Expr, body: any Stmts).                
-    Cases  ::= new (case: any Case, tail: any Cases + {NIL}).   
-    Switch ::= new (switch: any Expr, cases: any Cases). 
-    
-    UnApp   ::= new (op: any UnOp, arg1: any Expr).
-    BinApp  ::= new (op: any BinOp, arg1: any Expr, arg2: any Expr).
-    FunApp  ::= new (op: any Expr, args: any Vals).
-
-    Expr ::= UnApp + BinApp + FunApp + Literal.
-    Stmt ::= Expr + Switch + NextRead.
-    Stmts  ::= new (arg: any Stmt, tail: any Stmts + {NIL}).   
-
-    NextRead ::= new (pos: Integer + {NIL}, len: Expr).
-}
-
-model CalcParser of GenericFormatParser {
-    number is Var("number", Val(0)).
-    sign_value is Var("sign_value", Val(1)).
-    result is Var("result", Val(0)).
-    op_stack is List("op_stack", NIL). 
-    
-    cond1 is BinApp(EQ, Var("c", Val(0)), Val(0)).
-    stmt1 is BinApp(ADD, BinApp(MUL, number, Val(10)), UnApp(ATOI, Var("c", Val(0)))).
-    // Increment the read pointer by only 1 step.
-    stmt2 is NextRead(NIL, Val(1)).
-    body1 is Stmts(stmt1, Stmts(stmt2, NIL)).
-    case1 is Case(cond1, body1).
-}
-
-// Are we trying to validate if the input data is correct rather than if the parser is correct?
-// 
-// How generic should the parser DSL be? How much details of the TAR parser should be included in DSL?
-//
-// Goal: Extract the legacy C code into our parser DSL and use the DSL to find out there are bugs 
-// in the legacy code such as the infinite loop and negative size in the header. The parser DSL should
-// be able to be applied to other languages such as JSON, XML, etc.
-//
-// We should assume we don't know beforehand that the size in the header can't be negative and use the
-// symbolic execution to find out that the negative size will violate the constraints.
-// 
-// One possible way to model the TAR parser is to use state machines and GPT can rewrites the legacy C
-// code into a state machine-based new implementation in C.
-domain Parser
+domain SimpleTarParser
 {
   Header ::= new (name: Integer, size: Integer).
   Offset ::= new (name: Integer, pos: Integer).
@@ -105,10 +23,10 @@ domain Parser
   tooManyDone :- h is Header, name = h.name,
                     count({d | d is Done(name, _)}) > 1. 
   
-  conforms no tooManyDone, no badHeader.
+  // conforms no tooManyDone, no badHeader.
 }
 
-partial model pm of Parser
+partial model pm of SimpleTarParser
 [solver_RecursionBound = 5]
 {
   h1 is Header(100, 512).
@@ -117,4 +35,48 @@ partial model pm of Parser
   
   h2 is Header(101, x).
   h2Offset is Offset(101, 1024).
+}
+
+// Define the domain for the parser with dependent data types and multiple intermediate results
+domain GenericDataParser {
+    // Define constants for parsing states
+    Status ::= {INIT, READ, UPDATE, DONE}.
+
+    // Data constructor for the input data
+    InputData ::= new (name: String, data: String).
+
+    // Data constructor for the parsing context
+    Context ::= new (inputData: InputData, status: Status, curPos: Natural, offset: Natural).
+
+    // Data constructor for intermediate results
+    IntermediateResult ::= new (name: String, context: Context, derivedResult: String + Natural).
+
+    // Data constructor for parser state
+    ParserState ::= new (context: Context, intermediate: IntermediateResult + {NULL}).
+
+    // Derived constants to check parsing conditions
+    canReadMore :- ParserState(Context(InputData(_, data), READ, _, offset), _), 
+        length = strLength(data), offset < length.
+
+    isDone :- ParserState(Context(_, DONE, _, _), _).
+
+    // Rule to initialize the parser and in this rule the intermediate result is not initialized.
+    ParserState(Context(initData, INIT, 0, 0), NULL) :- initData is InputData(data, length).
+
+    // Rule to read data and update context
+    ParserState(newContext, IntermediateResult(name, newContext, newDerivedResult)) :-
+        inputData is InputData(_, data),
+        context is Context(inputData, READ, _, offset), 
+        ParserState(context, IntermediateResult(name, context, derivedResult)),
+        canReadMore,
+        curRead = toNatural(strGetAt(data, offset)), // Forced conversion to Natural
+        newDerivedResult = derivedResult + curRead, // Change this logic as needed
+        newContext = Context(inputData, READ, newPos, newOffset),
+        newPos = offset,
+        newOffset = offset + curRead. // Change this logic as needed
+}
+
+// Define a model to represent a specific parsing scenario
+model ExampleParser of GenericDataParser {
+    InputData("sample", "Hello, World!").
 }
