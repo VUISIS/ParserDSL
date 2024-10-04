@@ -141,6 +141,23 @@ def generate_formula_core_parser_domain():
     )
     return result
 
+def extend_formula_core_parser_domain():
+    text_untar_wrong = read_file_into_text("./data/untar_negsize.c")
+    text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
+    text_formula_parser_core_dsl = read_file_into_text("./formula/ParserDSL.4ml")
+    text_formula_documentation = []
+    reader = PdfReader("./data/formula.pdf")
+    for page in reader.pages:
+        text_formula_documentation.append(page.extract_text())
+
+    question = "Understand the c code, FORMULA documentation and extend GenericDataParser to capture the parsing logic in the code"
+    result = ask_chatgpt_interactively(
+        text_formula_documentation + [text_formula_parser_core_dsl],
+        [],
+        [question]
+    )
+    return result
+
 def untar_code_extraction_interactively():
     text_untar_wrong = read_file_into_text("./data/untar_negsize.c")
     text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
@@ -298,8 +315,9 @@ if __name__ == "__main__":
     # result = tar_in_prolog_to_formula()
     # result = untar_code_extraction(text_3d_lang_specs, text_untar_latest)
     # result = untar_code_extraction_interactively()
+    # result = generate_formula_core_parser_domain()
 
-    result = generate_formula_core_parser_domain()
+    result = extend_formula_core_parser_domain()
 
     print(result)
 
