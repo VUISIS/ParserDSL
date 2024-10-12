@@ -49,14 +49,15 @@ domain GenericDataParser {
     InputData ::= new (name: String, data: Bytes).
 
     // Parsing state that the includes the input data, status, current position, and offset.
-    State ::= new (inputData: InputData, status: Status, curPos: Natural, offset: Natural).
+    State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
 
     // Intermediate results that are derived during parsing and the derived result could have my types.
-    IntermediateResult ::= new (name: String, context: State, derivedResult: String + Natural).
+    IntermediateResult ::= new (name: String, context: State, derivedResult: String + Integer + { NULL }).
 
     // Decide the new offset and pos based on current state.
-    NextOffset ::= new (state: State, offset: Natural).
-    NextPos ::= new (state: State, pos: Natural).
+    NextOffset ::= new (state: State, offset: Integer).
+    NextPos ::= new (state: State, pos: Integer).
+    DeriveIntermediateResult ::= new (name: String, state: State, result: String + Integer + { NULL }).
 
     // Derived constants to check parsing conditions
     canReadMore :- State(InputData(_, data), READ, pos, offset), 
@@ -74,63 +75,92 @@ domain GenericDataParser {
     // Rule to initialize the parser with no intermediate results, but you can add them as needed.
     State(initData, INIT, 0, 0) :- initData is InputData(_, data). // Change this logic as needed
 
-    // Rule to initialize the parsing and can be used to read the initial header or meta info.
-    // TODO: Change this logic as needed
-    State(inputData, READ, pos, offset) :- State(inputData, INIT, 0, 0),
-        pos = 0, offset = 1. 
-
-    // TODO: Change this logic as needed
-    NextOffset(state, newOffset), IntermediateResult("num", state, newOffset) :- 
-        inputData is InputData(_, data),
-        state is State(inputData, READ, 0, offset), 
-        // TODO: Convert a byte from ASCII format to integer.
-        asciiVal = lstGetAt(#Bytes, data, 0).val,
-        newOffset = asciiVal.
-
-    // TODO: Change this logic as needed
-    NextPos(state, result) :- 
-        state is State(inputData, READ, 0, offset), 
-        result = offset.
-
-    // Rule to read the next block of data and the status is READ
+    // Rule to read the next block of data based on the NextPos and NextOffset.
     State(inputData, READ, newPos, newOffset) :-
         state is State(inputData, READ, pos, offset), 
         NextPos(state, newPos),
         NextOffset(state, newOffset),
         canReadMore.
     
-    // Rule to update intermediate results from current read and the new status is UPDATE
+    // Rule to update intermediate results from current read and other intermediate results.
+    // The new status is changed from READ to UPDATE while keeping other parameters the same.
     IntermediateResult(name, newState, newDerivedResult) :-
         inputData is InputData(_, data),
         state is State(inputData, READ, pos, offset), 
         IntermediateResult(name, state, derivedResult),
         newState = State(inputData, UPDATE, pos, offset),
-        curRead = toNatural(lstGetAt(#Bytes, data, pos + offset)),
-        newDerivedResult = derivedResult + curRead. // Change this logic as needed
-    
-    // Rule to derive intermediate result from other intermediate results
-    IntermediateResult(name, newState, newDerivedResult) :-
-        inputData is InputData(_, data),
-        state is State(inputData, _, pos, offset), // It can be a context in any status
-        IntermediateResult(name, state, oldDerivedResult),
-        newState = State(inputData, UPDATE, pos, offset), 
-        newDerivedResult = oldDerivedResult + 1. // Change this logic as needed
+        DeriveIntermediateResult(name, newState, newDerivedResult).
+        // curRead = toNatural(lstGetAt(#Bytes, data, pos + offset)),
 }
 
-model m of GenericDataParser {
-    // The first number decides how many numbers to read next and will return the sum.
-    // The number is separated by '+' and the expression is separated by '#'.
-    // Example: "3#1+2+3#" 
-    // "51(3) 35(#) 49(1) 43(+) 50(2) 43(+) 51(3) 35(#)" in ASCII format
+domain TinyDemoParser extends GenericDataParser {
+    // Rule to initialize parsing and read the initial header or meta info.
+    State(inputData, READ, pos, offset) :- State(inputData, INIT, 0, 0),
+        pos = 0, offset = 1. 
+
+    // Read the header and update the intermediate result with the count of numbers to read next.
+    // Read only one byte for the header.
+    NextOffset(state, newOffset) :- state is State(_, READ, 0, _),
+        newOffset = 1. 
+
+    // Initialize the intermediate result "count" to the number in the first byte at the initial state.
+    DeriveIntermediateResult("count", state, initialCount) :-
+        inputData is InputData(_, Bytes(Byte(asciiAsInt), _)),
+        state is State(inputData, READ, 0, _), 
+        // TODO: This is a temporary workaround for ASCII conversion
+        initialCount = asciiAsInt - 48.
+
+    // Initialize the intermediate result "sum" to 0 at the initial state.
+    DeriveIntermediateResult("sum", state, initialSum) :-
+        inputData is InputData(_, data), 
+        state is State(inputData, _, 0, _),
+        initialSum = 0.
+
+    // Decide how many bytes to read next after the header is read.
+    // Here we should read N bytes where N is the number we read from the header.
+    // But for simplicity, we just read one byte at a time.
+    NextOffset(state, newOffset) :- state is State(inputData, READ, pos, offset), 
+        pos > 0, newOffset = 1.
+        //inputData is InputData(_, data),
+        //byte = lstGetAt(#Bytes, data, 0),
+        //newOffset = byte.val - 48.
+        
+    // Update the intermediate result "sum" with a new number extracted and added.
+    DeriveIntermediateResult("sum", newState, newSum) :- 
+        inputData is InputData(_, data), 
+        newState is State(inputData, UPDATE, pos, offset),
+        oldState is State(inputData, READ, pos, offset),
+        pos > 0,
+        NextOffset(state, offset),
+        IntermediateResult("sum", oldState, oldSum),
+        // TODO: This is a temporary workaround for ASCII conversion
+        byte = lstGetAt(#Bytes, data, pos) - 48,
+        newSum = oldSum + byte.val,
+        byte.val > 35. // ASCII 35 is '#' and should be skipped.
+
+    // The next position is the current position plus the offset unless you want to skip some bytes.
+    NextPos(state, newPos) :- state is State(inputData, READ, pos, offset), newPos = pos + offset.
+    
+}
+
+model m of TinyDemoParser {
+    // Format: |header|#|digits| |header|#|digits| ...
+    // The byte in the header decides how many digits to read and it will return the sum.
+    // The header and the digits are separated by '#' and each expression is separated by space.
+    // Example: "3#1234 3#45" 
+    // "51(3) 35(#) 49(1) 50(2) 51(3) 52(4) 32(SPACE) 51(3) 35(#) 52(4) 53(5)" in ASCII format
     inputData is InputData("sample", 
         Bytes(Byte(51), 
-            Bytes(Byte(35), 
-                Bytes(Byte(49), 
-                    Bytes(Byte(43), 
-                        Bytes(Byte(50),
-                            Bytes(Byte(43),
-                                Bytes(Byte(51), 
-                                    Bytes(Byte(35), NULL))))))))).
+        Bytes(Byte(35), 
+        Bytes(Byte(49), 
+        Bytes(Byte(50), 
+        Bytes(Byte(51),
+        Bytes(Byte(52),
+        Bytes(Byte(32), 
+        Bytes(Byte(51), 
+        Bytes(Byte(35),
+        Bytes(Byte(52), 
+        Bytes(Byte(53), NULL)))))))))))).
 
     initState is State(inputData, INIT, 0, 0). 
     initSum is IntermediateResult("sum", initState, 0).
