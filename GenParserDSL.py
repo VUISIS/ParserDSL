@@ -150,9 +150,17 @@ def extend_formula_core_parser_domain():
     for page in reader.pages:
         text_formula_documentation.append(page.extract_text())
 
-    question = "Understand the c code, FORMULA documentation and extend GenericDataParser to capture the parsing logic in the code"
+    question = "1. Understand the C code in untar_negsize.c, FORMULA documentation and ParserDSL.4ml. \
+                2. Model untar_negsize.c in FORMULA by modifying the StringBasedParser domain in ParserDSL.4ml. \
+                3. Do not change the existing type definition in StringBasedParser domain such as Status and IntermediateResult. \
+                4. Change at place commented with 'Change the logic if needed' and add more rules if needed. \
+                5. Use strJoin() in FORMULA to concatenate strings. \
+                6. Feel free to replace the `name` parameter with actual variable name in IntermediateResult in the rules. \
+                7. Model `skipEntry` as IntermediateResult in FORMULA and reflect how its value affects the parsing. \
+                8. Model how `skipEntry` is computed from other IntermediateResults or the current read."
+    
     result = ask_chatgpt_interactively(
-        text_formula_documentation + [text_formula_parser_core_dsl],
+        text_formula_documentation + [text_formula_parser_core_dsl] + [text_untar_wrong],
         [],
         [question]
     )
@@ -168,11 +176,12 @@ def untar_code_extraction_interactively():
         text_formula_documentation.append(page.extract_text())
 
     question = "Understand the c code for tar parser and FORMULA documentation."
+    question2 = "Understand the parsing logic of c code in untar_negsize.c and model it in NuSMV language"
     
     chat_history = ask_chatgpt_interactively(
         init_system_contents=[text_untar_wrong] + text_formula_documentation,
         init_assistant_contents=[],
-        init_user_contents=[question]
+        init_user_contents=[question2]
     )
     return chat_history
 
