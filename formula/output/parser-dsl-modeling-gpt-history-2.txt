@@ -1,0 +1,2734 @@
+****************************************************************
+Context: 
+FORMULA 2.0:
+A Language for Formal Speciﬁcations
+Ethan K. Jackson and Wolfram Schulte
+Microsoft Research, Redmond, WA
+{ejackson,schulte }@microsoft.com
+Abstract. FORMULA2.0isanovelformal speciﬁcationlanguage based
+onopen-world logic programs and behavioral types . Its goals are (1) suc-
+cinct speciﬁcations of domain-speciﬁc abstractions and compilers, (2)
+eﬃcient reasoning and compilation of input programs, (3) diverse syn-
+thesis and fast veriﬁcation. We take a unique approach towards achieving
+these goals: Speciﬁcations are written as strongly-typed open-world logic
+programs. They are highly declarative and easily express rich synthe-
+sis / veriﬁcation problems. Automated reasoning is enabled by eﬃcient
+symbolic execution of logic programs into constraints. This tutorial in-
+troduces the FORMULA 2.0 language and concepts through a series of
+small examples.
+1D a t a a n d T y p e s
+1.1 Constants
+formula speciﬁcations deﬁne, examine, translate and generate data.T h es i m -
+plest kinds of data are constants , which have no internal structure. Every for-
+mulaspeciﬁcation has access to s ome predeﬁned constants. Numeric constants
+can be (arbitrarily) long integers:
+-1098245634534545630234, 0, 1, 2, 3098098445645649034
+Or, they can be pairs of integers separated by a ‘.’, i.e. decimal fractions:
+-223423.23422342342, 0.0, 1.5, 10.87987230000000000000003
+Or, they can be pairs of integers separated by a ‘/’, i.e. fractions:
+-223423/23422342342, 4/8, 9873957/987395487987334
+formula converts numerics into normalized fractions; no precision is lost. For
+example, the following equalities are true:
+2/3 = 6/9, 1/2 = 0.5, 1.0000 = 1
+Z. Liu, J. Woodcock, and H. Zhu (Eds.): Theories of Programming, LNCS 8050, pp. 156–206, 2013.
+c/circlecopyrtSpringer-Verlag Berlin Heidelberg 2013
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 157
+The following disequalities are true:
+2/3 != 0.66667, 0 != 0.0000000000000000000000000000001
+Operations on numerics do not lose precision. Inﬁnities are not explicitly part
+offormula ’s vocabulary. For example, the fraction ‘1/0’ causes a syntax error.
+ASCII strings are also supported. One way to write a string is by enclosing it
+in double-quotes. These strings must end on the same line where they began, so
+we refer to them as single-line strings . Here are some examples:
+"", "Hello World", "Foo \nBar"
+Sometimes it is necessary to put special characters inside of a string. This can
+be accomplished using the C -style escape character ‘ \’. Table 1 gives the escape
+sequences.
+Some strings are unpleasant to escape, such as strings containing code or
+ﬁlenameswith backslashes.Multi-line stringscaptureall the text within a pairof
+delimiters, including line breaks. A multi-line string starts with a single-double-
+quote pair
+ '
+"and ends with a double-single-quote pair
+ "
+'.B e l o wi sa n
+example; note ‘ \’ is not an escape character in multi-line strings:
+'" "This \string has funny 'thi \ngs in it'" "'
+The only sequence that needs to be escaped in a multi-line string is the sequence
+terminating the string. For symmetry, the starting sequence also has an escape
+code (see Table 2). For example, the following equality is true:
+'" ''"" ""'' \" '="' \"\"'\\"
+Theﬁnalkindofconstantisthe user-deﬁned constant .Syntactically,user-deﬁned
+constants are identiﬁers. Here are some examples of user-deﬁned constants:
+TRUE, FALSE, RED, GREEN, NIL
+Note that TRUEandFALSEareautomatically deﬁned on the user’s behalf, though
+they are not keywords.
+By convention, the names of user-deﬁned constants should consist of all up-
+percase characters and be at least two characters long. This convention helps to
+distinguish constants from other identiﬁers. Two user-deﬁned constants denote
+the same value are if and only if they have the same. For example:
+TRUE = TRUE, FALSE = FALSE, TRUE != FALSE, RED != BLUE
+
+++++++++++++++++++++++++++++++++
+158 E.K. Jackson and W. Schulte
+1.2 Data Constructors
+Complex data values are created by functions called data constructors (orcon-
+structors for short). An n-ary data constructor ftakesndata values as argu-
+ments and returns a new data value. Here are some examples:
+Person("John", "Smith"),
+Node(1, Node(2, NIL, NIL), Node(3, NIL, NIL))
+ThePer son(,) constructor creates Per sonvalues from two string arguments.
+TheNode(,,) constructor builds binary trees of integer keys. The arguments to
+Nodeare: (1) an integer key, (2) a left-subtree (or the constant NILif none) and
+(3) a right-subtree (or the constant NILif none).
+Data constructors are proper functions, i.e. they always produce the same
+values from the same inputs. Contrast this with the following object-oriented
+program:
+1:class Node {
+2: ...
+3: Node (int Key, Node left, Node right)
+4:{...}
+5:}
+6:
+7:Node x = new Node(1, null, null);
+8:Node y = new Node(1, null, null);
+9:if (x != y) {
+10: print("Different");
+11:}
+Table 1. Table of single-line string escapes
+Single-Line String Escapes #
+Syntax Result#
+\n Produces a line feed.
+\r Produces a carriage return.
+\t Produces a tab.
+\x Produces xforx/∈{n,r,t},e . g .\\or\".
+Table 2. Table of multi-line string escapes
+Multi-Line String Escapes #
+Syntax Result#
+''""Produces the sequence '".
+""''Produces the sequence "'.
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 159
+The program prints the string “Diﬀerent” because xandyhold diﬀerent nodes,
+even though the nodes were constructed with the same values. In formula two
+values arethe same if andonly if (1) they are the same constant,or (2)they were
+constructed by the same constructor using the same arguments. For example:
+NIL = NIL, NIL != FALSE,
+Node(1, NIL, NIL) = Node(1, NIL, NIL),
+Person("John", "Smith") != Node(2, NIL, NIL)
+As this example shows, values can be compared using the equality‘=’a n d dise-
+quality‘!=’ relations. These relations are deﬁned for arbitrary pairs of values.
+1.3 Ordering of Values
+Values are also ordered. The ordering relation on values is called a lexicographic
+order, which generalizes the dictionary order of strings. First, we split all values
+into four ordered families: numerics, strings, user constants, and complex values :
+Deﬁnition 11 (Ordering of Families) .
+family(x)def=⎧
+⎪⎪⎨
+⎪⎪⎩0i fxis a numeric ,
+1i fxis a string ,
+2i fxis a user constant ,
+3o t h e r w i s e .
+Families yield a precedence relation /lessmuchon values:
+x/lessmuchyiffamily(x)<f a m i l y (y).
+Deﬁnition 12 (Ordering of Values) .For values xandy, deﬁnex<yifx/negationslash=y
+and any of the following are satisﬁed:
+–x/lessmuchy.
+–Both values are numerics; xcomes before yon the real number line.
+–Both values are strings; xcomes before yin dictionary order (assuming a
+case-sensitive order using the ASCII encoding of characters).
+–Both values are user constants; the name of xcomes before the name of y
+in dictionary order.
+–Both values are complex, i.e. x=f(t1,...,t n)a n dy=g(s1,...,s m), and
+any of the following are satisﬁed:
+•The name of constructor fcomes before the name of the constructor g
+in dictionary order.
+•Both constructors have the same name, and the ﬁrst iwhereti/negationslash=sithen
+ti<s i.
+Here are some examples:
+0<1, 1<"FALSE", "FALSE" <FALSE, FALSE <TRUE
+
+++++++++++++++++++++++++++++++++
+160 E.K. Jackson and W. Schulte
+Table 3. Table of built-in data types
+Built-in Data Types #
+Name Meaning #
+Real The set of all numeric values.
+Integer The set of all integers.
+Natural The set of all non-negative integers.
+PosInteger The set of all positive integers.
+NegInteger The set of all negative integers.
+String The set of all string integers.
+Boolean The set of constants TRUEandFALSE.
+Node(1, Node(10, NIL, NIL), NIL) <Node(2, NIL, NIL),
+Node(2, NIL, NIL) <Person("John", "Smith")
+The predeﬁned relations <,<=,>,a n d>=use this order. The predeﬁned func-
+tions minand maxﬁnd the smallest and largest values according to <. Finally,
+all predeﬁned functions that must sort values, e.g. toList, also use this order.
+1.4 Data Types and Subtyping
+Adata type (or just a type) is a expression standing for a set of values. Table 3
+lists the built-in data types and their meanings. In addition, other types can be
+deﬁned. Suppose f(...)i sa nn-ary constructor, then the type fstands for the
+range of the constructor f. Suppose cis a constant, then the type {c}stands for
+the singletonsetcontaining c. Suppose τ1andτ2aretypes,then τ1+τ2standsfor
+theset-unionofthetwotypes.Finally, f(τ1,...,τ n)standsforthesetofallvalues
+obtained by applying fto all possible values in τ1,...,τ n.formula provides
+some special syntax to make it easier to write types. A ﬁnite enumeration is a
+set of constants:
+{RED, GREEN, FALSE, 1, 2, "Hello" }
+An enumeration can also include integer ranges:
+{-1000..1000, 1001..1001, 1002 }
+This type stands for the set of all strings, integers, and Boolean values:
+Real + String + {TRUE, FALSE }
+This type stands for the set of all integer-keyed binary trees with a non-empty
+left child:
+Node(Integer, Node, Node + {NIL})
+
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 161
+Also, this type stands for the set of all integer-keyed binary trees with a non-
+empty right child:
+Node(Integer, Node + {NIL}, Node)
+Data types are related to each other by the subtyping relation . In object-oriented
+languagessubtyping is indicated by explicitly subclassing a base class, extending
+an interface, or implementing an interface. In formula the subtyping relation-
+ship is determined implicitly by the values a type represents. A type τ1is a
+subtype of τ2if the values represented by τ1are a subsetof those represented by
+τ2.W ew r i t e τ1<:τ2ifτ1is a subtype of τ2. Here are some examples of types
+satisfying the subtyping relationship:
+{1, 2}<: PosInteger <: Natural + String <: Real + String
+Node(Integer, Node, Node) <: Node(Integer, Node, Node + {NIL})
+Node(Integer, Node, Node + {NIL})<: Node
+The above examples show that types are fa irly precise; they can represent very
+speciﬁc sets of data. Also, types are behavioral ;formula only cares about the
+set of values a type stands for, but not how the type is written. For example, all
+of these types mean the same:
+{0..10}+ Natural = Natural = {0}+ PosInteger
+Node(Integer, Node + {NIL}, Node + {NIL}) = Node
+formula infers types for expressions, and these types over-approximate the
+evaluation of expressions. We write e:τif the expression eis assigned the type
+τ. For instance, a C++ compiler might assign the inttype to the expression 1 or
+thefloattype to the expression 1 .5. Because formula types are more precise,
+the type of a value is just a singleton set containing that value, i.e. 1 : {1}and
+1.5:{3
+2}. Because subtyping is implicit by subset inclusion, the value 1 can be
+used anywhere a Realis accepted without coercion. This is unlike C++, where
+t h ei n t e g e rv a l u e1w o u l db ec o e r c e dt ot h eﬂ o a t i n gp o i n tv a l u e1 .0 because int
+andfloatare diﬀerent kinds of values.
+Consider the more complicated C++ example:
+1:enum E{Z e r o=0 ,O n e=1 ,T w o=2 };
+2:bool Foo(E x, E y)
+3:{
+4: auto z = x + y;
+5: return z >10;
+6:}
+
+++++++++++++++++++++++++++++++++
+162 E.K. Jackson and W. Schulte
+TheC++ compiler infers z:int, even though the expected values for xandy
+are in the interval [0 ,2]. Also, zis always less than 10 and z>10 is always false.
+Consider an analogous formula speciﬁcation:
+1:transform Foo(x: E, y: E) returns (b:: Bool)
+2:{
+3: E ::={0..2}.
+4: Return(TRUE) :- z = %x + %y, z >10.
+5:}
+The transform takes two parameters xandyof typeE(deﬁned in line 3). The
+rule in line 4 is triggered whenever z=x+yandz>10.formula infers that
+x,y:{0..2},z:{0..4},z>10 :{FALSE}. Finally, it issues an error because the
+condition z>10 can never be satisﬁed. (We expl ain the structure of rules in the
+next section.) Thus, type inference can be used to catch errors in speciﬁcations.
+1.5 Type Declarations
+Type declarations are used to: (1) deﬁne simple names for complicated type
+expressions, (2) introduce new data constructors along with the types of their
+arguments, (3) introduce new user-deﬁned constants. Type declarations come in
+two forms. The ﬁrst form assigns a name to a type expression.
+TypeName ::= TypeExpr.
+The second form introduces a new data constructor.
+ConstructorName ::= (Arg1
+ TypeExpr, ..., ArgN
+ TypeExpr).
+The expressions appearing in declarations are restricted; they cannot contain
+constructor applications such as Node(Integer,NIL,NIL ). However, it is legal to
+usethe type Node,whichstandsfortheentirerangeofthe Node(,,)constructor.
+This restriction allows for more eﬃcient type inference and type manipulation.
+Type declarations must be placed in modules, which are self-contained units.
+The meaning of a type declaration is understood w.r.t. all the type declarations
+within the same module. In the examples to follow we use domain modules to
+holdtype declarations.Fornowit is enoughtounderstandthat type declarations
+are not visible outside of their modules. (We describe domains in detail in the
+next section.) Below are two modules DandD/primethat deﬁne the type Idin
+diﬀerent ways:
+domain D {Id ::= Integer. }domain D' {Id ::= String. }
+In domain Dthe type Idstands for integers and in D/primeit stands for strings. The
+formula compiler accepts these declarations because they occur in two distinct
+modules. On the other hand these declarations are illegal.
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 163
+Error: Conﬂicting deﬁnitions of type Id
+1:domain D
+2:{
+3: Id ::= Integer.
+4: Id ::= String.
+5:}
+There are multiple conﬂicting declarations of the type Idin the same module.
+formula accepts any set of type declarations as long as their meaning is con-
+sistent across the module. For example, this module is legal because it deﬁnes
+Idin two equivalent ways.
+Legal: All deﬁnitions of type Id are equivalent
+1:domain D
+2:{
+3: Id ::= Integer.
+4: Id ::= NegInteger + {0}+ PosInteger.
+5:}
+1.6 Declaring Constants
+User-deﬁned constants are implicitly declared by using them in some enumera-
+tion in some type declaration. Every domain automatically contains the decla-
+ration:
+Boolean ::= {TRUE, FALSE }.
+Introduces user-deﬁned constants RED, GREEN, and BLUE.
+1:domain Colors
+2:{
+3: NamedColor ::= {RED, GREEN, BLUE }.
+4: Color ::= {RED, GREEN, BLUE, 0..16777215 }.
+5:}
+TheNamedColor type contains the constants RED,GREEN andBLUE.
+These constants are implicitly declared by using them in the type declaration.
+TheColortype also mentions these constants along with all integers in the 24-
+bit RGB color spectrum. User-deﬁned constants are only distinguished by name,
+so every occurrence of REDstands for the same user-deﬁned constant. Unlike
+C++, a user-deﬁned constant is not equivalent to an integer.
+In C++ user-deﬁned constants are actually integers; not possible in FORMULA.
+1:enum Color {RED = 0xFF0000, GREEN = 0x00FF00, BLUE = 0x0000FF };
+
+++++++++++++++++++++++++++++++++
+164 E.K. Jackson and W. Schulte
+UnlikeC#, user-deﬁned constants exist independently of the type declaration in
+which they are introduced.
+C# introduces constants NamedColors.RED, NamedColors.GREEN,
+NamedColors.BLUE
+1:enum NamedColor {RED, GREEN, BLUE }
+C# introduces constants Colors.RED, Colors.BLUE, Colors.GREEN
+2:enum Color {RED, GREEN, BLUE }
+1.7 Declaring Data Constructors
+Data constructors are declared by special syntax. The left-hand side of the dec-
+laration is the name of the constructor and the right-hand side is a comma-
+separated list of argument types with parenthesis. Every constructor must have
+at least one argument, otherwise it would be constant. Here is another domain
+providing constructors for colors:
+1:domain Colors
+2:{
+3: NamedColor ::= (String).
+4: RGBColor ::= (r: {0..255},g :{0..255},b :{0..255}).
+5: RGBAColor ::= (a: {0..255},r :{0..255},g :{0..255},b :{0..255}).
+6: Color ::= NamedColor + RGBColor + RGBAColor.
+7:}
+NamedColor (line 3) deﬁnes a unary constructor taking a string. This construc-
+tor can be used to create values such as:
+NamedColor("RED"), NamedColor("GREEN"), NamedColor("BLUE")
+It is illegal to apply the NamedColor color constructor to values other than
+strings. Also the corresponding NamedColor type is automatically deﬁned and
+only contains those values that obey argument types. The RGBColor construc-
+tor (line 4) takes three arguments for the red, green, and blue components. The
+arguments have been given explicit names r,g,a n db. Naming arguments is op-
+tional but useful. Finally, the Colortype is a union of the possible color values.
+As before, there are no implicit conver sions between values. For instance:
+RGBColor(0, 0, 255) != 255 != RGBAColor(0, 0, 0, 255).
+Every constructor crea tes distinct values.
+Data constructors are similar to structsor records in C-like languages, but
+more general. Consider the task of deﬁning a node struct in C#. The following
+code is illegal because the struct Nodedirectly depends on Nodevalues.
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 165
+Cannot deﬁne a struct that depends directly on itself.
+1:struct Node
+2:{
+3: int key; Node left; Node right;
+4: Node(int k, Node l, Node r)
+5:{key = k; left = l; right = r; }
+6:};
+The problem is that Nodemust have a default value, and there is no way to
+construct this default value. The deﬁnition becomes legal if structis replaced
+withclassand then nullis a valid default value for the leftandrightﬁelds.
+However, this comes with the price that node equality is signiﬁcantly weakened,
+i.e.n==monly if the variables nandmhold the same reference. In other
+words, binary trees cannot be compared as if they were just values.
+The declarations of formula constructors can cyclically depend on them-
+selves. Here is the equivalent deﬁnition for a Nodeinformula .
+1:domain Trees
+2:{
+3: Node ::= (key : Integer,
+4: left : Node + {NIL},
+5: right: Node + {NIL}).
+6:}
+The only requirement on constructors is that there must be some arguments
+of ﬁnite size satisfying the type constraints of the constructor. For example, a
+minimal node value can be constructed by:
+Node(0, NIL, NIL)
+Note that NILis not a keyword; just a user-deﬁned constant. This speciﬁcation
+has an error because there is no way to construct a node value using a ﬁnite
+number of applications.
+1:domain Trees
+2:{
+3: Node ::= (key : Integer,
+4: left : Node,
+5: right: Node + {NIL}).
+6:}
+The problem is the leftﬁeld can only take a node value, but the only way
+to construct a node value is to apply the node constructor. Therefore, only
+an inﬁnitely long sequence of node applications could construct such a value.
+formula returns an error message like this:
+(3, 4): The type Node is badly defined; it does not accept
+any finite terms.
+++++++++++++++++++++++++++++++++
+166 E.K. Jackson and W. Schulte
+The following domain deﬁnes nodes in tw o equivalent ways. It is accepted by the
+compiler:
+1:domain Trees
+2:{
+3: Node ::= (key : Integer,
+4: left : Node + {NIL},
+5: right: Node + {NIL}).
+6:
+7: Node ::= (key: Integer, left: Tree, right: Tree).
+8: Tree ::= Node + {NIL}.
+9:}
+The type Treeis a super-type of the type Node, because in contains all node
+values and the additional value NIL.
+2 Domains and Models
+The purpose of a domain is describe a “class of things”. The purpose of a model
+is to describe a speciﬁc “thing”. Here are a few examples that we explore in this
+tutorial:
+1.DAG: The DAG domain describes the pro perties of directs acyclic graphs
+(DAGs). A DAG model represents an individual DAG.
+2.SAT: The SAT domain describes the set of satisﬁable boolean expressions.
+A SAT modeldescribes a single expressionandthe variableassignments that
+witness its satisﬁability.
+3.FUNC: The FUNC domain describes a small language of arithmetic func-
+tions and the rules of their evaluation. A FUNC model represents a program
+of the FUNC language.
+The ﬁrst step to deﬁne a “class of thing s” is to create a representation for
+“things” using formula data types. Consider the classical deﬁnition of a di-
+rected graph G:
+Gdef=(V,E)w h e r e E⊆V×V. (1)
+Classically, a directed graphis r epresentedby a set of vertices Vand set of edges
+E;e a c he∈Eis a pair of vertices. Furthermore , suppose vertices are represented
+by integers, then the set of all ﬁnite integer-labeled graphs is:
+Gdef={(V,E)|V⊂Z∧E⊆V×V}where every Vis ﬁnite.
+Here is an example of a speciﬁc graph:
+Gexdef=({1,2,100},{(1,2),(100,100)}).
+formula does not directly support sets and relations, so we cannot express
+vertices and edges as sets. Instead, integ er-labeled graphs are represented using
+two data constructors VandEas follows:
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 167
+Example 1 (Integer-labeled graphs).
+1:domain IntGraphs
+2:{
+3: V ::= new (lbl: Integer).
+4: E ::= new (src: V, dst: V).
+5:}
+Intuitively, vertices are values such as:
+V(1), V(2), V(100)
+and edges are values such as:
+E(V(1), V(2)), E(V(100), V(100))
+Though these constructors provide representations for the elements of a graph,
+the domain does not deﬁne any speciﬁc graph elements. This is because the
+domain is intended as a schema for all graphs; it is not intended to represent a
+speciﬁc graph. A speciﬁc graph is represented by a model, as follows:
+Example 2 (A small graph).
+1:model Gex of IntGraphs
+2:{
+3: V(1).
+4: V(2).
+5: V(100).
+6: E(V(1), V(2)).
+7: E(V(100), V(100)).
+8:}
+A model has a name and indicates the domain to which it belongs (line 1).
+The body of a model is a list of values separated by periods. These periods are
+actually assertions about the model. Each expression f(...).is an assertion:
+“The value f(...)is always provable in the model M.”
+Thus, the model Gexcontains a set of assertions, built with data constructors,
+about some vertex and edge values. These assertions deﬁne the speciﬁc elements
+of the graph Gex.
+2.1 Querying Models
+To understand how a model contains a set of assertions, create a ﬁle called
+ex1.4ml and copy the code contained in Examples 1 and 2. A query operation
+tests if a property is provable on a model . Follow these steps to test if a vertex
+calledV(1) exists in the model Gex:
+++++++++++++++++++++++++++++++++
+168 E.K. Jackson and W. Schulte
+1:...\Somewhere >Formula.exe
+2:
+3:[]>load ex1.4ml
+4:(Compiled) ex1.4ml
+5:0.82s.
+6:[]>query Gex V(1)
+7:Started query task with Id 0.
+8:0.06s.
+9:[]>ls tasks
+10:
+11:All tasks
+12:Id|Kind|Status|Result| Started |Duration
+13:----|-------|-------- |-------- |------------------- |----------
+14:0|Query|Done|true|5/17/2013 3:28 PM |0.04s
+15:0.03s.
+Line 3 loads and compiles the ﬁle ex1.4ml. Line 6 starts a query operation on
+the model Gexand tests for the property V(1). IfV(1) is provable in Gexthen
+this query operation returns true; otherwise it returns false. Starting a query
+spawns a new background task that may take some time to complete. The Id
+of the newly created task is reported (e. g. Id 0). Line 9 causes the status of all
+tasks to be displayed. Line 14 shows that the query completed with the result
+true.
+On the other hand this query evaluates to false, because there is no vertex
+namedV(3):
+[]>query Gex V(3)
+This is very important: Any query that is not provable using the model (and its
+domain declarations) is false. The query V(3) is false for the model Gexbecause
+there are no assertions that can prove it . We can ask more interesting queries,
+such as: Does there exist some vertex?
+[]>query Gex V(x)
+This query contains a variablecalledx. More generally, a query is true if there is
+some substitution for the variables that is provable. This query is true because
+replacing xwith 1,2,or 100forms queriesthat areprovable.Variablesappearing
+in a query are not declared and are local to the query expression.
+More complicated patterns can be used in a query. This one tests if there is
+an edge that loops back onto the same vertex.
+[]>query Gex E(x, x)
+It is true because if x=V(100) then E(V(100),V(100)) is provable. As with
+any language, it is possible to mistype commands. The formula type system
+will catch some of these mistakes. For example, the query
+[]>query Gex E(V(x), x)
+
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 169
+is always false because xmust simultaneously be an integer and a vertex, which
+is never possible. In this case the query is ignored and warning messages are
+returned:
+1:[]>qr Gex E(V(x), x)
+2:commandline.4ml (2, 1): Argument 2 of function E is badly typed.
+3:commandline.4ml (0, 0): The install operation failed
+4:Failed to start query task.
+5:0.02s.
+6:[]>
+Queries can be conjoined using the comma operator (‘,’). Such a query is true if
+there is some substitution of variables making every conjunct true. This query
+tests if there are two edges that can be placed end-to-end:
+[]>query Gex E(x, y), E(y, z)
+Notice that the variables xandzonly appear once in the query. Variables that
+only appear once can be written with an underscore (‘
+ ’); every occurrence of an
+underscore creates a new variable with a diﬀerent name from all other variables
+in the expression. The previous query can be rewritten as:
+[]>query Gex E(
+ , y), E(y,
+ )
+Underscores are useful for visually emphasizing those variables that appear in
+multiple places. Queries can also be formed from built-in relations and con-
+straints.
+[]>query Gex V(x), x >20
+Constructor labels can be used to write more readable queries. The query:
+“Is there an edge whose source vertex has a label greater than 100?”
+can be written as:
+[]>query Gex e is E, e.src.lbl >100
+The constraint ei sErequires eto be a provable value of type E.
+The order in which conjuncts are written does not matter; the semantics of
+a query is the same. However, queries can only check for properties that can be
+answeredusingmodelassertionsandaﬁnitenumberofevaluations.Forexample,
+this query is not allowed:
+[]>query Gex x >100
+It asks if there exists a number greater than 100. While the answer is “yes”, it
+cannot be proved using the assertions written in the model, nor can it be proved
+by evaluating >for a ﬁnite number of values. In this case, the following message
+is returned:
+++++++++++++++++++++++++++++++++
+170 E.K. Jackson and W. Schulte
+1:[]>query Gex x >100
+2:commandline.4ml (2, 3): Variable x cannot be oriented.
+3:commandline.4ml (0, 0): The install operation failed
+4:Failed to start query task.
+5:0.02s.
+6:[]>
+Themessage ‘‘Variable x cannot be oriented’’ meansthecompilercannot
+expressxinsucha waythatthequerycanbeevaluated.Notethat formula can
+reason about the properties of numbers, but the query operation is not the
+mechanism to accomplish this. We shall discuss this more in Section
+ ??
+.
+Finally, it is important to remember that even though f(...,t,...)m i g h tb e
+provable, this does not imply that tis itself provable. Consider the following
+model:
+1:model NoVertices of IntGraphs
+2:{
+3: E(V(1), V(2)).
+4:}
+This query is true:
+[]>query NoVertices E(
+ ,
+)
+But this query is false:
+[]>query NoVertices V(
+ )
+There are no provable vertices, even though a vertex value does appear within a
+provable edge. (This may surprise users familiar with term-rewriting systems.)
+2.2 Model Conformance
+Am o d e l Mconforms to a domain Dif the following properties are satisﬁed:
+P1. Every assertion in Mis constructed from new-kind constructors.
+P2. Every constructor application in Mobeys the type declarations in D.
+P3. The operation query M D.conforms evaluates to true.
+P1-P2arecheckedwheneveramodel is compiled; any violationcausesacompile-
+time error; P3 is checked upon request. A new-kind constructor is a constructor
+marked with the modiﬁer new. Recall that both VandEconstructors were
+marked with this modiﬁer.
+1:V ::= new (lbl: Integer).
+2:E ::= new (src: V, dst: V).
+Constructorsthatarenotmarkedwiththe newmodiﬁerareonlyusedtoperform
+auxiliary computations; they can never appear in models. (We demonstrate this
+in more detail in later sections.) P2 is familiar from earlier examples. It is always
+illegal to use constructors with badly typed arguments, as in:
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 171
+1:model BadlyTyped of IntGraphs
+2:{
+3: E("Foo", "Bar").
+4:}
+P3 allows domains to place ﬁne-grained constraints on the conformance re-
+lationship. Unlike the ﬁrst two properties, satisfying P3 can be diﬃcult and
+evaluating its satisfaction can be expensive. For these reasons, formula only
+checks P3 upon request and failure of this property is not an error.
+2.3 Relational Constraints
+We began by trying to express the set of all integer-labeled ﬁnite graphs. The
+intent was to deﬁne IntGraphs so its set of conforming models would be equiv-
+alent to the set of integer-labeled ﬁnite graphs. Properties P1-P2 guarantee that
+models contain only vertex and edge assertions, which encode graph elements
+in an obvious way. However, there is the additional constraint that graph edges
+should be pairs of graph vertices, i.e. E⊆V×V. Did we capture this constraint
+correctly? The answer is that it depends on how we choose to deﬁne the set of
+verticesVpresent in a model M. There are two options: (1) Every occurrence
+of a vertex value anywhere in the model is implicitly a member of V. (2) Only
+those vertices that are provable are members of V. Consider this example:
+1:model SomeVertices of IntGraphs
+2:{
+3: V(1).
+4: E(V(1), V(2)).
+5:}
+Under the ﬁrst deﬁnition, the vertex set for this model is {1,2}and the edge
+set is{(1,2)}. This satisﬁes the constraint E⊆V×V. Under the second deﬁni-
+tion the vertex set is only {1}and the edge set violates the constraint because
+2/∈V. By default, formula uses the second and more restrictive deﬁnition:
+E⊆V×Vmeans every argument to E(,) must be provable. Models violat-
+ing this property do not conform to the domain. These kinds of constraints are
+so common that formula automatically introduces them. To see this, add the
+code for SomeVertices toex1.4ml and run this query:
+[]>query SomeVertices IntGraphs.conforms
+The result of this query is false because V(2) is not derivable. Add V(2) to the
+model, save it, and type:
+[]>reload ex1.4ml
+Evaluate the query again to observe that it evaluates to true.
+++++++++++++++++++++++++++++++++
+172 E.K. Jackson and W. Schulte
+We call the previous kind of constraint a relational constraint . Relational
+constraints are injected by the compiler when it appears that one constructor is
+b e i n gu s e dt oe n c o d eas e t Sand another constructor i s being used to encode a
+relationR⊆...×S×....
+Deﬁnition 21 (Relational Constraint) .The constructor Ris relational on con-
+structor Sin position iif the constructor Ris declared as:
+R ::= new (..., arg
+ i: T
+ i, ...).
+andSis a subtype of Ti. The relationalconstraint means that for every provable
+valuetcontaining R(...,t i,...)a n dti=S(...)t h e ntimust also be provable.
+Some type declarations are not intended to encode ﬁnite relations, and the de-
+fault behavior would produce strange results. Consider the following recursive
+deﬁnition for binary trees:
+Node ::= new (left: Node + {NIL}, right: Node + {NIL}).
+This declaration ﬁts the pattern for relational constraints and the generated
+constraints are satisﬁable. However, it assumes the user intended to encode a
+relation with the following strange property:
+Node⊆Node×Node.
+The only ﬁnite relation satisfying this property is the empty set. There is clearly
+a semantic mismatch between the binary relation Nodeand the binary data con-
+structor Node. In order to bring attention to this mismatch formula produces
+the following error:
+1:ex.4ml (3, 4): The constructor Node cannot have relational
+2: constraints on itself; see argument 1.
+3:ex.4ml (3, 4): The constructor Node cannot have relational
+4: constraints on itself; see argument 2.
+When this error occurs at position i, the user must explicitly indicate that the
+constructor is not intended to encode a relation at position i. Placing the any
+modiﬁer before the argument type indicates that anywell-typed value is permit-
+ted here, not just those values that are provable. The compiler does not generate
+relational constraints for this argument and the error message does not occur.
+Here is the proper declaration for the recursive binary tree constructor:
+Node ::= new (left: any Node + {NIL}, right: any Node + {NIL}).
+Of course, binary trees can also be encoded using ﬁnite relations, but the encod-
+ing is a diﬀerent one from the recursive constructor shown above.
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 173
+2.4 Finite Functions
+Finite functions are a special case of ﬁnite relations satisfying additional con-
+straints. Consider the representation of a forest Fof binary trees as follows:
+Fdef=(V,parent )w h e r e parent:V→ {/latticetop}∪ ({L,R}×V).
+The setVcontains the vertices of the forest and the function parentassigns to
+eachvertex vits parent: parent(v)=(L,u)i fvis the left child of u;parent(v)=
+(R,u)i fvis the right child of u;parent(v)=/latticetopifvis a root. Additionally, the
+parentfunction should not introduce a cycle, but we ignore this constraint for
+now. The parent function can be treated as a ﬁnite relation by listing its input-
+output pairs. Consider this forest where 1 is a root, 2 is its left child, and 3 is
+its right child:
+Fexdef=({1,2,3},{(1,/latticetop),(2,(L,1)),(3,(R,1))}).
+Theparentrelation encodes a total ﬁnite function if it is total on the domain:
+∀v∈V.∃x.(v,x)∈parent,
+and every input is related to a unique output:
+∀v∈V.∀x,y.(v,x)∈parent∧(v,y)∈parent⇒x=y.
+formula supports declarations of ﬁnite functions also. As before, these decla-
+rations are really introducing data constructors plus additional constraints that
+provable values must encode ﬁnite functions. Example 3 shows the syntax.
+Example 3 (Relational Trees).
+1:domain RelTrees
+2:{
+3: V ::= new (lbl: Integer).
+4: Parent ::= fun (chld: V = >cxt: any {ROOT}+ Context).
+5: Context ::= new (childPos: {LFT, RT}, prnt: V).
+6:}
+7:
+8:model Fex of RelTrees
+9:{
+10: V(1). V(2). V(3).
+11: Parent(V(1), ROOT).
+12: Parent(V(2), Context(LFT, V(1))).
+13: Parent(V(3), Context(RT, V(1))).
+14:}
+
+++++++++++++++++++++++++++++++++
+174 E.K. Jackson and W. Schulte
+Line 5 declares the Context constructorto represent {L,R}×V. Line 4 declares
+theParentconstructor using the funmodiﬁer. This modiﬁer implies new.T h e
+argumentsontheleftsideof= >correspondtothedomainoftherelationandthe
+arguments on the right side correspond to the codomain. The codomain contains
+thevalue ROOT(i.e./latticetop)andany Context value.The funmodiﬁerinjectsunique-
+ness constraints, i.e. for all provable values Parent(v,x)a n dParent(v,y)t h e n
+x=y.T h e totality arrow =>injects totality constraints, i.e. for every provable
+V(x)thereisaprovable Parent(V(x),y).Totalityisaﬀectedbythe anymodiﬁer.
+If an argument is marked with any, then the ﬁnite function must be deﬁned for
+everywell-typedvalue. For example, this declarationwouldcausean error:
+Parent ::= fun (chld: any V = >cxt: any {ROOT}+ Context).
+The anymodiﬁer applied to the ﬁrst argument means there must be a provable
+Parent(V(x),y) value for every well-typed value V(x). This implies an inﬁnite
+Table 4. Table of relation / function modiﬁers
+Relation / Function Modiﬁers #
+Syntax Meaning #
+R ::= new (..., Ti, ...). Relational constraint: If Sis a constructor,
+S<:T1,R(...,t i,...)occurs in a provable
+value, and ti=S(...),t h e ntimust be prov-
+able.
+R ::= new (..., any Ti, ...). Occurrences of Rare exempt from the rela-
+tional constraint in position i.
+R ::= fun (..., D m->..., C n).Partial function: Same as new. Additionally,
+the set of provable R values must form a par-
+tial function from D1×...×DmtoC1×
+...×Cn.
+R ::= fun (..., D m=>..., C n).Total function: Same as partial function, but
+must be total on D1×...×Dm; totality is
+modiﬁed by any.
+R ::= inj (..., D m->..., C n).Partialinjection: Same as partialfunction; ad-
+ditionally if R(x,z)andR(y,z)are provable
+thenx=y.
+R ::= inj (..., D m=>..., C n).Total injection: Constrained to be a total
+function and partial injection.
+R ::= sur (..., D m->..., C n).Partial surjection: Same as partial function;
+additionally must be total on C1×...×Cn
+(totality is modiﬁed by any).
+R ::= bij (..., D m->..., C n).Bijection: Constrained to be a total surjection
+and partial injection; partiality arrow has no
+eﬀect.
+R ::= bij (..., D m=>..., C n).Bijection: Constrained to be a total surjection
+and partial injection.
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 175
+number of provable values, which is not permitted. formula returns the follow-
+ing error message:
+1:ex.4ml (4, 4): The function Parent requires totality on an
+2: argument supported by an infinite number of
+3: values; see argument 1.
+Wheneverthe domainofaﬁnite functionisinﬁnite that function cannotbe total,
+but it can be partial.T h e partial arrow −>indicates a partial function, which
+need not be deﬁned on every element of its domain. Suppose every vertex label
+should also be given a “pretty name”. This could be expressed by extending the
+signature of Vas follows:
+V ::= fun (lbl: Integer - >prettyName: String).
+Every vertex must have a unique pretty name, but there does not need to be a
+vertex deﬁned for every integer. Table 4 s hows the complete variety of relation
+/ function modiﬁers.
+2.5 Recursive Types, Aliases, and Symbolic Constants
+Example 3 showed a partial speciﬁcation of binary trees using a representation
+inspired by ﬁnite relations. Another approachis to use the full power of recursive
+data types. In this representation an entire tree is a single complex value. The
+locations of values distinguishes vertices from each other. This is in contrast to
+using of unique identiﬁers to distinguish vertices.
+Example 4 (Algebraic Trees).
+1:domain AlgTrees
+2:{
+3: Node ::= new (left: any Node + {NIL},
+4: right: any Node + {NIL}).
+5: Root ::= new (root: any Node).
+6:}
+7:
+8:model Fex' of AlgTrees
+9:{
+10: Root(
+11: Node(
+12: Node(NIL, NIL),
+13: Node(NIL, NIL))).
+14:}
+Example 4 shows an algebraic representation of trees using data constructors.
+Notice that the entire tree is a single value (line 10). The Root() constructor is
+used to mark some nodes as roots in the forest. The left and right children of the
+++++++++++++++++++++++++++++++++
+176 E.K. Jackson and W. Schulte
+root are both nodes without children, represented by the value Node(NIL,NIL )
+(lines 12, 13). In fact, both these nodes are exactly the same value. They are
+distinguishable by where they occur in the construction of the parent. This
+representation has several advantages: (1) Nodes do not need to be labeled. (2)
+It is impossible to create an illegal tree. (3) Two trees are the same if and only
+if they are the same value. Also, becaus et h es a m ev a l u ec a nr e p r e s e n tm a n y
+nodes, it is possible to deﬁne the value once and reuse it in many places. Reuse
+is accomplished by introducing an aliasas follows:
+leaf is Node(NIL, NIL).
+The right-hand side of the iskeyword requires a constructed assertion. The left-
+hand side is an identiﬁer that stands for the constructed value. Using aliases,
+the previous model can be expressed as:
+1:model Fex
+ Shared of AlgTrees
+2:{
+3: leaf is Node(NIL, NIL).
+4: Root(Node(leaf, leaf)).
+5:}
+Aliases can be used to represent models w ith exponentially less space. Consider
+the following complete binary tree with 1,023 nodes:
+1:model BiggerTree of AlgTrees
+2:{
+3: leaf is Node(NIL, NIL).
+4:
+5: subtree
+ 3 is Node(leaf , leaf).
+6: subtree
+ 7 is Node(subtree
+ 3 , subtree
+ 3).
+7: subtree
+ 15 is Node(subtree
+ 7 , subtree
+ 7).
+8: subtree
+ 31 is Node(subtree
+ 15 , subtree
+ 15).
+9: subtree
+ 63 is Node(subtree
+ 31 , subtree
+ 31).
+10: subtree
+ 127 is Node(subtree
+ 63 , subtree
+ 63).
+11: subtree
+ 255 is Node(subtree
+ 127, subtree
+ 127).
+12: subtree
+ 511 is Node(subtree
+ 255, subtree
+ 255).
+13: subtree
+ 1023 is Node(subtree
+ 511, subtree
+ 511).
+14:
+15: Root(subtree
+ 1023).
+16:}
+Aliases are visible to all assertions within their deﬁning model. The order in
+which aliases are deﬁned is inconsequential. However, aliases deﬁnitions cannot
+form as cycle as this would be equivalent to applying an inﬁnite number of
+constructors. This property is checked at compile time. Here is an example:
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 177
+1:model InfiniteTree of AlgTrees
+2:{
+3: infinite
+ left is Node(infinite
+ right, NIL).
+4: infinite
+ right is Node(NIL, infinite
+ right).
+5: Root(Node(infinite
+ left, infinite
+ right)).
+6:}
+Theinfinite
+leftnode has an inﬁnitely deep subtree as its left node, and the
+infinite
+rightnode has an inﬁnitely deep subtree as its right node. This problem
+is detected and the following error is reported.
+1:inf.4ml (4, 4): Symbolic constant InfiniteTree.%infinite
+ right is
+2: defined using itself.
+3:inf.4ml (3, 4): Symbolic constant InfiniteTree.%infinite
+ left is
+4: defined using itself.
+2.6 Symbolic Constants
+The previous error messages referred to symbolic constants . A symbolic constant
+is aconstant, i.e. it is a function that takes no arguments and returns a value.
+However, the value it returns may not be known at compile time. This latter
+property is unlike the constants we have encountered so far. For example, the
+constant 1 always returns the constant 1 and the constant NILalways returns
+the constant NIL. Each model alias adeclared in model Mdeﬁnes a symbolic
+constant called M.%a. It returns the value produced by expanding all aliases in
+the model. Consider Example 2 rewritten with aliases:
+1:model Gex' of IntGraphs
+2:{
+3: v1 is V(1).
+4: v2 is V(2).
+5: v100 is V(100).
+6:
+7: e
+1
+2 is E(v1, v2).
+8: e
+100
+100 is E(v100, v100).
+9:}
+These aliases create symbolic constants with the following properties:
+Gex/prime.%v1= V(1)
+Gex/prime.%v2= V(2)
+Gex/prime.%v100 = V(100)
+Gex/prime.%e
+1
+2= E(V(1),V(2))
+Gex/prime.%e
+100
+100 =E(V(100),V(100))
+Unlike variables, symbolic constants can be used to test the properties of speciﬁc
+model elements. Whenever a symbolic constant occurs in a query, it matches the
+corresponding assertion in the model where it was deﬁned. For example:
+++++++++++++++++++++++++++++++++
+178 E.K. Jackson and W. Schulte
+[]>query Gex' Gex'.%v1.lbl = 1
+This query is satisﬁed if the value represented by Gex/prime.%v1 is provable and its
+label is equal to 1. This query evaluates to true. Symbolic constants are preﬁxed
+with the percent-sign (‘%’) to distinguish them from variables. Consider this
+query:
+[]>query Gex' E(%v1, v1)
+Here %v1 is the same symbolic constant as before, but v1 is a variable. (Names
+do not need to be fully qualiﬁed if they can be unambiguously resolved.) This
+query is satisﬁed if there is some value for v1t h a tm a k e s E(V(1),v1) provable.
+The assignment v1=V(2) is one such value and the query evaluates to true.
+Finally, this query evaluates to false, because there is not an edge from V(1) to
+V(1):
+[]>query Gex' E(%v1, %v1)
+2.7 Separate Compilation
+Aformula module can refer to modules in other ﬁles. The compiler will load
+and compile all ﬁles required to completely compile a program.There are several
+ways to refer to modules in another ﬁles. The ﬁrst way is to qualify the module
+name with a source ﬁle using the atoperator. For example:
+model M of D at "foo.4ml" {...}
+The compiler will look for a domain named Din the ﬁle foo.4ml. This method
+does not aﬀect the resolution of any other occurrence of D. For example, this
+code loads two diﬀerent domains, both called D, from diﬀerent ﬁles:
+1:model M1 of D at ".. \\..\\version1.4ml" {...}
+2:model M2 of D at '".. \..\version2.4ml"' {...}
+(Relativepaths areresolvedw.r.t.to the path ofﬁle wherethey occur.)However,
+it is illegal to deﬁne two modules with the same name in the same ﬁle.
+1:model M of D at "version1.4ml" {...}
+2:model M of D at "version2.4ml" {...}
+This causes an error:
+1:ex.4ml (2, 1): The module M has multiple definitions.
+2: See ex.4ml (1, 1) and ex.4ml (2, 1)
+The disadvantage of the atoperator is that it must be used on every reference
+toD. Another option is to register Dusing a conﬁguration block . Conﬁguration
+blockshaveaccesstovar iousconﬁguratio nobjects,oneofwhichiscalled modules
+mapping names to ﬁles. To register DandD/primein the scope of the ﬁle write:
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 179
+1:[
+2: modules.D = "D at foo.4ml",
+3: modules.D' = "D' at foo.4ml"
+4:]
+5:
+6:model M of D {...}
+Lines 1 - 4 form a conﬁguration block. Now every occurrence of Dwill resolve
+toDlocated in foo.4ml.I fDis deﬁned to be in several locations, then an error
+occurs.
+Causes an error because D is deﬁned to be at two diﬀerent places.
+1:[
+2: modules.D = "D at version1.4ml",
+3: modules.D = "D at version2.4ml"
+4:]
+Finally, each module has its own local conﬁguration parameters. Modules in-
+herit ﬁle level conﬁgurations, and can extend these with additional parameters.
+Module-level conﬁgurations are isolated from each other, so occasionally it may
+be useful to register domains at t his level. Here is an example:
+1:model M1 of D
+2:[
+3: modules.D = "D at version1.4ml"
+4:]
+5:{
+6: ...
+7:}
+8:
+9:model M2 of D
+10:[
+11: modules.D = "D at version2.4ml"
+12:]
+13:{
+14: ...
+15:}
+The module-level conﬁguration block must be placed after the module declara-
+tion and before the opening curly brace. These conﬁgurations do not conﬂict,
+because they are lexically scoped to the modules M1a n dM2. Separate compi-
+lation is available for all types of formula modules.
+3 Rules and Domain Constraints
+Domain constraints are essential for deﬁning “classes of things”. So far we have
+demonstrated type constraints and a few kinds of relation / function constraints
+(that also appear in type declarations). However, these constraints are not gen-
+eral enough to capture many properties. Recall the relational trees example
+++++++++++++++++++++++++++++++++
+180 E.K. Jackson and W. Schulte
+(Example 3) where we negl ected to constrain trees to be acyclic. There was no
+way to write this constraint using the mechanisms presented thus far, and so
+the speciﬁcation is incomplete. Some models that are not trees conform to the
+RelTrees domain.
+The remaining aspects of the formula language deal with computing prop-
+erties of models using conditional statements, which we call rules.T h e s ec o m -
+puted properties can be used to write powe rful domain constraints (among other
+things). A basic rule has the following syntax:
+head :- body.
+Thebodypart can contain anything a query can contain. The headpart is a
+sequence of constructor applications applied to constants and variables. A rule
+means:
+“Whenever the body is provable for some variable assignment, then the head is
+also provable for that variable assignment.”
+Thus, a rule is a logical statement, but it can also be executed (like a query) to
+grow the set of provable values.
+Consider the problem of computing t he ancestors between vertices in a
+RelTrees model. First, we introduce a helper constructor called anc(,)i n t ot h e
+RelTrees domain to represent the ancestor relationship:
+anc ::= (ancestor: V, descendant: V).
+Notice that ancis not modiﬁed with new(or any other modiﬁer that implies
+new). This means an ancvalue can never be asserted by a model. The only legal
+way to prove an ancvalue is by proving its existence with rules. We call anca
+derived-kind constructor. Here is a rule that can prove uis an ancestor of wifu
+is the parent of w:
+anc(u, w) :- Parent(w, Context(
+ , u)).
+Here is a rule that can prove uis an ancestor of wifuis an ancestor vandvis
+an ancestor of w.
+anc(u, w) :- anc(u, v), anc(v, w).
+As with queries, the comma operator (‘,’) conjuncts constraints. Every conjunct
+must be satisﬁed for the rule to be satisﬁed. If two rules have the same head,
+then they can be syntactically combined using the semicolon operator (‘;’).
+anc(u, w) :- Parent(w, Context(
+ , u)); anc(u, v), anc(v, w).
+Intuitively the semicolon operator behaves like disjunction, but remember that
+each semicolon actually marks the body of an independent rule.
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 181
+Table 5. Table of matching constraints
+Matching Constraints #
+Syntax Meaning #
+q true if the derived constant qis provable; false otherwise.
+f(t1,...,tn) true for every assignment of variables where f(t1,...,t n)
+is provable; false otherwise.
+x is f(t1,...,tn) true for every assigment of variables where f(t1,...,t n)is
+provable and x=f(t1,...,t n); false otherwise.
+xi sT true ifxis a provable value and a member of the type
+namedT; false otherwise.
+Table 6. Table of interpreted predicates
+Interpreted Predicates #
+Syntax Meaning #
+no{...} true if the set comprehension is empty; false otherwise.
+t=t ’ true iftandt/primeare the same value; false otherwise.
+t! =t ’ true iftandt/primeare diﬀerent values; false otherwise.
+t<t’ true iftis less than t/primein the order of values; false otherwise.
+t<=t ’ true iftis less than equal to t/primein the order of values; false otherwise.
+t>t’ true iftis greater than t/primein the order of values; false otherwise.
+t>=t ’ true iftis greater than or equal to t/primein the order of values; false
+otherwise.
+x:T true ifxis a member of the type named T; false otherwise.
+3.1 Derived Constants
+A tree-like graph is not a tree if it has a cycle in its ancestor relation. There
+is a cycle if and only if some vertex is an ancestor of itself. The following rule
+summarizes this property:
+hasCycle :- anc(u, u).
+The symbol hasCycle is a derived-kind constant (or just derived constant ). A
+derivedconstantisdeclaredbyusingit, unqualiﬁed,onthe left-handsideofsome
+rule. Rules can only prove derived constants or values built from constructors.
+This rule causes an error:
+1: -V (
+ ).
+ex.4ml (1, 4): Syntax error - A rule cannot produce
+the base constant 1
+
+++++++++++++++++++++++++++++++++
+182 E.K. Jackson and W. Schulte
+The full name of a derived constant cdeclared in domain DisD.c. This allows
+for (an optional) coding idiom where each derivedconstant is declared in exactly
+one place.
+Declares hasCycle, because appears unqualiﬁed on left-hand side of the rule.
+(Does not aﬀect the provable values.)
+1:hasCycle :- RelTrees.hasCycle.
+First use of hasCycle; not a declaration because used in qualiﬁed form.
+2:RelTrees.hasCycle :- anc(u, u).
+Second use of hasCycle; this rule is redundant.
+3:RelTrees.hasCycle :- anc(u, w), anc(w, u).
+3.2 Rule Bodies
+The body of a rule is a conjunction of constraints. Constraints can be either
+matching constraints orinterpreted predicates . A matching constraint is satisﬁed
+ifthereissomesubstitution ofthe variableswherethe resultingvalue isprovable.
+An interpreted predicate is satisﬁed if there is some substitution of the variables
+where a special predicate evaluates to true. Tables 5 and 6 list the forms of
+matching constraints and interpreted predicates. The order in which conjuncts
+appear is irrelevant; as with queries, all variables must be orientable.
+To demonstrate interpreted predicates, consider that our RelTrees domain
+also allows a single node to have more than two left (or right) children.
+1:model TwoLeftChildren of RelTrees
+2:{
+3: v1 is V(1). v2 is V(2). v3 is V(3).
+4: Parent(v1, ROOT).
+5: Parent(v2, Context(LFT, v1)).
+6: Parent(v3, Context(LFT, v1)).
+7:}
+The following rule can be used to d etect these anoma lous graphs:
+1:tooManyChildren :-
+2: Parent(x, Context(pos, parent)),
+3: Parent(y, Context(pos, parent)),
+4: x! =y .
+The disequality predicate (‘!=’) is used to detect if more than one distinct node
+hasbeenassignedtothesamepositionintheparent.Usingtheequalitypredicate
+(‘=’) and the selector operator (‘.’), the above rule can be rewritten as:
+1:tooManyChildren :-
+2: px is Parent,
+3: py is Parent,
+
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 183
+4: px.chld != py.chld,
+5: px.cxt = py.cxt,
+6: px.cxt != ROOT.
+The choice of whether to use the ﬁrst or second rule is a matter of style. (Other
+equivalent rules can be written too.)
+3.3 Interpreted Functions
+formula alsoprovidesmany interpreted functions ,suchas+, and(,),toString (),
+etc... An interpreted function can appear anywhere a t,t/primeortiappears in Tables
+5 and 6. (See Section 5 for the full list of interpreted functions.) This constraint
+ﬁnds all the vertices whose child labels sum to the label of the parent.
+1:SumToParent(v) :-
+2: Parent(x, Context(
+ , v)),
+3: Parent(y, Context(
+ , v)),
+4: x.lbl + y.lbl = v.lbl.
+The interpreted function + represents ordinary arithmetic addition, which is
+only deﬁned for numeric values. Therefore x.lblandy.lblmust be numeric values
+for the operation to be meaningful. These extra requirements are automatically
+added as side-constraints to the rule body. The complete rule constructed by
+theformula compiler is:
+1:SumToParent(v) :-
+2: Parent(x, Context(
+ , v)),
+3: Parent(y, Context(
+ , v)),
+4: x.lbl + y.lbl = v.lbl,
+5: xlbl = x.lbl, xlbl : Real,
+6: ylbl = y.lbl, ylbl : Real.
+Theseside-constraintshav eanimportantconsequence:Arulewill neverevaluate
+operations on badly-typed values. The side-constraints guarantee that the rule
+is not triggered for values where the operators are undeﬁned.
+To demonstrate this, create a new ﬁle containing the code in Example 5:
+Example 5 (Pretty labeled trees).
+1:domain PrettyRelTrees
+2:{
+3: V ::= new (lbl: Integer + String).
+4: Parent ::= fun (chld: V = >cxt: any {ROOT}+ Context).
+5: Context ::= new (childPos: {LFT, RT}, prnt: V).
+6:
+7: SumToParent ::= (V).
+8: SumToParent(v) :-
+9: Parent(x, Context(
+ , v)),
+
+++++++++++++++++++++++++++++++++
+184 E.K. Jackson and W. Schulte
+10: Parent(y, Context(
+ , v)),
+11: x.lbl + y.lbl = v.lbl.
+12:}
+13:
+14:model StringTree of PrettyRelTrees
+15:{
+16: vA is V("a").
+17: vB is V("b").
+18: vC is V("c").
+19:
+20: Parent(vB, ROOT).
+21: Parent(vA, Context(LFT, vB)).
+22: Parent(vC, Context(RT, vB)).
+23:}
+In this domain vertices can have either integer labels or “prettier” string labels.
+The model StringTree contains a single tree with only string labels. Run the
+query:
+[]>query StringTree SumToParent(
+ )
+and notice that it evaluates to false. The query does not produce any errors
+or exceptions. The side-constraints cre ated by + simply prevents the rule from
+being triggered by the string labeled vertices in StringTree .
+3.4 Type Environments
+In fact, formula uses type inference to inform you about the values that may
+trigger a rule. Type:
+[]>types PrettyRelTrees
+and the following listing is returned:
+1:+ Type environment at (8, 4)
+2: v: V(Integer)
+3: ~dc0: Parent(V(Integer), Context( {RT}+{LFT}, V(Integer)))
+4: x: V(Integer)
+5: ~dc1:{RT}+{LFT}
+6: ~dc2: Parent(V(Integer), Context( {RT}+{LFT}, V(Integer)))
+7: y: V(Integer)
+8: ~dc3:{RT}+{LFT}
+9: ~sv0: Integer
+10: ~sv1: Integer
+11: ~sv2: Integer
+12: + Type environment at (8, 22)
+13: v: V(Integer)
+14: ~dc0: Parent(V(Integer), Context( {RT}+{LFT}, V(Integer)))
+
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 185
+15: x: V(Integer)
+16: ~dc1:{RT}+{LFT}
+17: ~dc2: Parent(V(Integer), Context( {RT}+{LFT}, V(Integer)))
+18: y: V(Integer)
+19: ~dc3:{RT}+{LFT}
+20: ~sv0: Integer
+21: ~sv1: Integer
+22: ~sv2: Integer
+This listing shows the inferred types for variables. Type inference is displayed as
+a sequence of nested type environments . The ﬁrst type environment (line 1) lists
+the inferred types for variables in the head of the rule. The second nested type
+environment (line 12) lists the inferred types for the body of the rule. Had the
+rule contained several bodies via the se micolon operator, then there would be a
+distinct type environment for each body, and all of these environments would be
+nested under the head. The type of the head would then be the union of all the
+types in the bodies.
+Line 2 shows that the variable vis guaranteedto be of type V(Integer); it can
+never be a string labeled vertex. The variables named ˜dc0,˜dc1,˜dc2,˜dc3are
+don’t care variables. They were generated by the compiler wherever we preferred
+not to provide a variable name. This happened in four places in the body:
+Parent(x, Context(
+ , v)), Parent(y, Context(
+ , v))
+In the ﬁrst matching constraint we did not provide a variable to bind the match-
+ing constraint (using the isoperator). The compiler generates one called ˜dc0
+and its type is:
+Parent(V(Integer), Context( {RT}+{LFT}, V(Integer)))
+This matching constraint is guaranteed to match only Parentvalues whose child
+is an integer-labeled vertex in the cont ext of an integer-labeled parent. The
+variable ˜dc1occurs because we used the underscore operator (‘
+ ’) in the ﬁrst
+argument of Context. The variables ˜dc2and ˜dc3were analogously created
+for the second pattern. Finally, the variables ˜sv0,˜sv1,a n d ˜sv2are compiler-
+generated selector variables . They stand for the selection of ﬁelds:
+~sv0 = x.lbl, ~sv1 = y.lbl, ~sv2 = z.lbl
+Examining the type environments is useful for understanding how constraints in
+the body interact to restrict the triggering of rules. formula only generates an
+error if it is impossible to trigger a rule. For instance, change the declaration of
+Vto:
+V ::= new (lbl: String).
+and reload the program. This will result in errors:
+ex.4ml (8, 80): Argument 1 of function + is badly typed.
+ex.4ml (8, 80): Argument 2 of function + is badly typed.
+
+++++++++++++++++++++++++++++++++
+186 E.K. Jackson and W. Schulte
+3.5 Set Comprehensions
+Sometimes it is necessary to aggregate allthe provable values of a given type
+into a single result. The rules we have shown so far cannot accomplish this
+task. Consider again the IntGraphs example (Example 1) and imagine trying to
+compute the in-degree of a vertex, i.e. the number of distinct edges coming into
+a vertex. One might be tempted to write rules such as:
+1:indeg
+ atleast
+ 2(v) :-
+2: vi sV ,
+3: e1 is E(
+ , v), e2 is E(
+ , v),
+4: e1 != e2.
+5:
+6:indeg
+ atleast
+ 3(v) :-
+7: vi sV ,
+8: e1 is E(
+ , v), e2 is E(
+ , v), e3 is E(
+ , v),
+9: e1 != e2, e1 != e3, e2 != e3.
+These rules can only determine lower bounds on the in-degree by testing for
+vertices with at least kdistinct incoming edges. Using this approach, we must
+write a rule for every possible in-degree that could be encountered. (We could
+never write all such rules.) Also, the rules would get larger; the rule computing
+indeg
+ atleast
+ kwould contain O(k2) constraints. Also, even with these two rules,
+we still cannot write a rule that ﬁnds vertices whose in-degree is exactly two.
+Av e r t e x vhas a degree of exactly two if indeg
+atleast
+2(v) is provable and
+indeg
+atleast
+3(v)isnotprovable.Butsofarwecannottestif indeg
+atleast
+3(v)
+isnotprovable in the body of a rule.
+Set comprehensions remedy this problem and fundamentally increase the ex-
+pressive power of formula . A set comprehension has the following form:
+{t1, ..., tn |body}
+The body part can be legal rule body (e.g. it can contain the semicolon operator
+and nested comprehensi ons). The expressions t1,...,t ncan be any legal combi-
+nation of constants, constructors, variables, and selectors. A set comprehension
+means:
+“Form a set Sof values as follows: For every assignment of variables satisfying the
+body substitute these values in to each tiand add each tito the set S.
+Here is an example of using a set comprehension to compute the in-degree of an
+arbitrary vertex.
+indeg(v, k) :- v is V, k = count( {e|ei sE (
+ ,v )}).
+Thecount() operation is an interpreted func tion that takes a set comprehension
+and returns its size. The comprehen sion forms a set of all the edges with v
+in the destination position, and kis equal to the size of this set. Notice that
+the comprehension sees the variables d eclared outside of it, and so each choice
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 187
+of value for the variable vinstantiates vinside the comprehension. However,
+variables introduced inside the comprehension do not escape. The variable eis
+scoped to the comprehension and other co mprehensions cannot see it. Consider
+this rule:
+q :- count( {x|V(x), x >0}) = count( {x|V(x), x <0}).
+The ﬁrst occurrence of xis lexically scoped to the ﬁrst comprehension, and
+second occurrence is scoped to the second comprehension. This rule tests if
+the number of vertices with positive labels equals the number with negative
+labels. This rules does not constrain xto be both positive and negative (which
+is impossible).
+Comprehensions can only be used in combination with certain interpreted
+predicates / interpreted functions. Vari ables can only be assigned values, so it is
+illegal to assign a set comprehension to a variable. The interpreted predicate no
+is used to test if a comprehension is empty, it is equivalent to the constraint:
+count({...})=0
+This rule computes all the sourcesin a graph, i.e. all the vertices with zero
+in-degree.
+source(v) :- v is V, no {e|ei sE (
+ ,v )}.
+The body of this comprehension consists of a single matching constraint. For
+the special case where nois applied to a comprehension with a single matching
+constraint, then only the body of the comprehension needs to be written.
+source(v) :- v is V, no e is E(
+ , v).
+Equivalently,
+source(v) :- v is V, no E(
+ , v).
+3.6 General Rules and Rule Heads
+A general rule has for the form:
+head1, ..., headm :- body1; ...; bodyn.
+It is equivalent to the set of rules:
+head1, ..., headm :- body1.
+...
+head1, ..., headm :- bodyn.
+
+++++++++++++++++++++++++++++++++
+188 E.K. Jackson and W. Schulte
+A general rules proves all heads head 1,...,head mfor every satisfying assign-
+ment of the body. Each head must be formed from constants, constructors, and
+variables. A rule head must satisfy the following properties:
+–Under all circumstances, a rule head mu st evaluate to a derived constant or
+a constructed value.
+–Under all circumstances, a rule head must evaluate to a well-typed value.
+–Every variable appearing in a rule head must appear at the top level of the
+body. (The variable cannot be introduced by a comprehension.)
+Allofthesepropertiesarecheckedatcompiletimeandgenerateerrorsifviolated.
+A rule violating the ﬁrst property was demonstrated earlier (i.e. a rule that
+proved the constant 1). The second proper ty is the most interesting. It requires
+the constraints in the body to prove that every possible assignment satisfying
+the body yields a well-typed head value. Imagine adding the following code to
+Example 5 where vertices can hav e integer or string labels:
+1: IntLabel ::= (Integer).
+2:
+3: IntLabel(x) :- V(x).
+4: isIntLabel :- IntLabel(x), V(x).
+The rule in line 3 matches a vertex; the inferred type of xisString+Integer.
+However, the head IntLabel (x)r e q u i r e s xto be an integer. If the rule were
+triggered by a string-labeled vertex, then it would produce a badly-typed head
+value. This danger is detected by the formula compiler:
+ex.4ml (3, 4): Argument 1 of function IntLabel is unsafe.
+Some values of type String are not allowed here.
+Contrast this with the rule in line 4. Here the conjuncts IntLabel (x)a n dV(x)
+constrain xto be an integer. This rule is accepted by the compiler. Remember
+that the bodies must constrain variables enough so that the compiler can prove
+the heads are always well-typed. This ar chitecture is designed to detect mistakes
+in rules at compile time.
+There is one exception to the previous d iscussion. Selectors can be used in the
+head of a rule, in which case they are treated as if they occurred the body. This
+meanselectorsappearingintheheadwillconstrainthevariablesappearinginthe
+body.Thisrulecomputesifonevertexisachildofanotherinarelationaltree:
+isChild(p.chld, p.cxt.prnt) :- p is Parent.
+The occurrence of p.cxt.prnt constrains pto have the type Parent(V,Context )
+even though no such constraint appear s directly in the body. The rule the com-
+piler produces is actually:
+1:isChild(p.chld, p.cxt.prnt) :-
+2: p is Parent,
+ = p.chld,
+ = p.cxt.prnt.
+Finally, every variable appearing in a rule head must also appear at the top level
+of a rule body. This rule is illegal:
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 189
+isChild(p.chld, x) :- p is Parent.
+because xdoes not appear in the body. This restriction prevents rules from
+proving an inﬁnite number of facts, thereby preserving executability of rules.
+More subtly, this rule is also illegal:
+isChild(x, y) :- no Parent(x, Context(
+ , y)).
+Intuitively,this rulesucceedsifthereisno Parentvaluematchingthe constraint,
+so no assignments are available for the variables xandyin the head. A more
+general way to understand the problem is to re-introduce the lexical scoping
+braces:
+isChild(x, y) :- no {p|p is Parent(x, Context(
+ , y))}.
+The variables xandyare not visible outside of the set comprehension, so they
+cannot be used in the head. Finally, a factis a rule whose head contains no
+variables and whose body is empty. It is treated as a rule whose heads are
+always provable. A fact can be written as:
+value1, ..., valuem.
+3.7 Stratiﬁcation and Termination
+Rules are a form of executable logic. This means we can simultaneously treat
+them as a set of logical statements or as a kind of program, but both points-of-
+view should agree on what the rules mean. Obtaining this agreement becomes
+complicated without additional requirements on the structure of rules. The ﬁrst
+major challenge arises because of set comprehensions. Consider these rules:
+1:p: -n oq .
+2:q: -n op .
+To execute these rules as program, formula (1) chooses a rule, (2) computes
+all the new values it proves, and (3) repeats steps 1-2 until no new values are
+proved. If the ﬁrst rule is executed ﬁrst then pis proved because qis not, but
+thenqcannot be proved. On the other hand, if the second rule is executed ﬁrst
+thenqis proved because pis not, but then pcannot be proved. Consequently,
+the answer to query M p depends on the order of execution.
+There are two ways to reconcile this behavior. Either we can treat this
+behavior as correct, in which case the l ogical interpretation of rules must be
+generalized. Or, we can restrict the stru cture of rules to prevent this behavior
+all together. We choose the second approach, and prevent rules that would ex-
+hibit the behaviorjust described. One well-knownrestrictionthat eliminates this
+problem is called stratiﬁcation .
+Deﬁnition 31 (Stratiﬁcation) .Aformula program is stratiﬁed if there is no
+set comprehension that exam ines values (indirectly) proved by the rule contain-
+ing the comprehension.
+++++++++++++++++++++++++++++++++
+190 E.K. Jackson and W. Schulte
+In the previous example the ﬁrst rule contains a set comprehension no{q|q}.
+And,qvalues are proved by the second rule, which examines pvalues (under a
+set comprehension of its o wn). Therefore the ﬁrst se t comprehension examines
+values that could be indirectly proved by the rule containing it. This is a sign
+that the order of execution coul d yield diﬀerent outcomes. formula produces
+the following error message for the previous program:
+1:ex.4ml (1, 9): A set comprehension depends on itself.
+2: Listing dependency cycle 0...
+3:ex.4ml (1, 9): A set comprehension depends on itself.
+4: Dependency cycle 0
+5:ex.4ml (1, 4): A set comprehension depends on itself.
+6: Dependency cycle 0
+7:ex.4ml (2, 9): A set comprehension depends on itself.
+8: Dependency cycle 0
+9:ex.4ml (2, 4): A set comprehension depends on itself.
+10: Dependency cycle 0
+The error messages list the locations of the rules and the set comprehensions
+that form a dependency cycle. Stratiﬁcation is fully checked at compile time and
+unstratiﬁed programs are rejected.
+Rules are executed so that all values are proved before a dependent set com-
+prehension is executed. This strategy al ways computes a unique result, which
+coincides with the logical interpretat ion of rules. Users may write rules in any
+syntactic order, but they will always be executed to respect the dependencies of
+set comprehensions. For example:
+1:smallInDegree :- no {v|indeg(v, k), k >3}.
+2:indeg(v, k) :- v is V, k = count( {e|ei sE (
+ ,v )}).
+A graph has a “small in-degree” if no in-d egree is greater than three. The ﬁrst
+rule computes smallInDegree by comprehending over all the indegvalues. Fur-
+thermore, the seco nd rule computes indegvalues by comprehending over all the
+edges. The order of executi on will be: compute all the Evalues, and then com-
+pute all the indegvalues, and then compute the smallInDeg value. It does not
+matter that smallInDeg appeared earlier in program text.
+The second challenge with executable logic is termination .
+Deﬁnition 32 (Termination) .A domain is terminating if the set of provable
+values is ﬁnite for every model of that domain.
+A non-terminating domain may execute forever when evaluating a query.
+Currently formula does not check for termination, so a user may write a non-
+terminating program and later ﬁnd that query execution never stops. Theo-
+retically termination cannot be checked with certainty for arbitrary programs,
+though many conservative analyses are possible and formula may use some of
+them in the future. Here is a classic example of a non-terminating rule repre-
+senting the successor function s().
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 191
+s(x) :- x = 0; x is s.
+The value s(0) is provable, and so the value s(s(0)) is provable, and so the value
+sn(0) is provable for every positive integer n. In fact, the successor function is
+one way to represent the natural numbers. Users should not try to axiomatize
+theories, such as the theory of natural numbers, using formula .I n s t e a d ,t h e y
+should utilize the interpreted functions that already embed these theories into
+theformula language.
+3.8 Complex Conformance Constraints
+We have shown how rules can compute pro perties of models. To create a con-
+formance constraint use the following syntax.
+conforms body.
+Deﬁnition 33 (Model Conformance) .A model conforms to its domain if:
+–Every assertion in M is constructe d from new-kind constructors.
+–Every value in M is well-typed.
+–The body of every conformance constraint is satisﬁed for some substitution
+of the variables.
+Internally, formula creates a special derived constant D.conforms for each do-
+mainD.Allconformanceconstraintsmustbeprovablefor D.conforms tobeprov-
+able.Additionally,conformanceconstraintsareintroducedfortherelation/func-
+tionconstraintsappearingintypedeclarations.Table7liststhepredeﬁnedderived
+constants.Usersmaywriterulesreferringtotheseconstants,butitisillegaltoadd
+arulethatprovesthem. Onlythecompilercanaddrulesprovingtheseconstants.
+Wenowlistthecompletedomainsfordirectedacyclicgraphsandrelationaltrees.
+Example 6 (Directed Acyclic Graphs).
+1:domain DAGs
+2:{
+New-kind constructors.
+3: V ::= new (lbl: Integer).
+4: E ::= new (src: V, dst: V).
+Derived-kind constructors.
+5: path ::= (V, V).
+Computation of transitive closure.
+6: path(u, w) :- E(u, w); E(u, v), path(v, w).
+Acyclicity constraint.
+7: conforms no path(u,u).
+8:}
+
+++++++++++++++++++++++++++++++++
+192 E.K. Jackson and W. Schulte
+Table 7. Table of predeﬁned derived constants
+Predeﬁned Derived Constants #
+Name Meaning #
+D.conforms Provable if all conformance constraints are satisﬁed.
+D.notRelational Provable if a provable value contains f(...,t i,...),fis
+relational on position i,ti=g(...),a n dg(...)is not prov-
+able.
+D.notFunctional Provable if a constructor is declared to be a (partial) func-
+tion, but its provable values map an element from the do-
+main of the function to several distinct elements in the
+codomain.
+D.notTotal Provable if a constructor is declared to be a total func-
+tion, but some element of its domain is not mapped to an
+element of its codomain.
+D.notInjective Provable if a constructor is declared to be a (partial) injec-
+tion, but several elements of its domain are mapped to the
+same element in its codomain.
+D.notInvTotal Provable if a constructor is declared to be a (partial) sur-
+jection, but there is an element of its codomain for which
+no element of the domain is mapped.
+Example 7 (Relational Trees).
+1:domain RelTrees
+ Final
+2:{
+New-kind constructors.
+3: V ::= new (lbl: Integer + String).
+4: Parent ::= fun (chld: V = >cxt: any {ROOT}+ Context).
+5: Context ::= new (childPos: {LFT, RT}, prnt: V).
+Derived-kind constructors.
+6: anc ::= (ancestor: V, descendant: V).
+Computation of ancestors.
+7: anc(u, w) :- Parent(w, Context(
+ , u)); anc(u, v), anc(v, w).
+Computation of too-many children.
+8: tooManyChildren :-
+9: Parent(x, Context(pos, parent)),
+10: Parent(y, Context(pos, parent)),
+11: x! =y .
+Conformance constraints
+12: conforms no anc(u, u).
+13: conforms no tooManyChildren.
+14:}
+
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 193
+3.9 Extracting Proofs
+Oftentimesitisusefultoknow whyaqueryevaluatestotrue.Ifaqueryevaluates
+to true, then a proof tree can be obtained showing how the rules prove the query.
+In a new ﬁle type the code from Example 6 along with the code below:
+1:model LittleCycle of DAGs
+2:{
+3: v1 is V(1).
+4: v2 is V(2).
+5: E(v1, v2).
+6: E(v2, v1).
+7:}
+Execute the query (and observe that it evaluates to true):
+[]>query LittleCycle path(u, u)
+Next type:
+[]>proof 0
+(0 is the id of the query task; type the particular id of your task.) The following
+output is displayed:
+1:Truth value: true
+2:
+3:
+Query
+ 263ea486
+ 4485
+ 4bff
+ bda4
+ c99ea8f94c27.requires :- (2, 1)
+4: ~dc0 equals
+5:
+ Query
+ 263ea486
+ 4485
+ 4bff
+ bda4
+ c99ea8f94c27.~requires0 :- (2, 1)
+6: ~dc0 equals
+7: path(V(2), V(2)) :- (6, 4)
+8: ~dc0 equals
+9: E(V(2), V(1)) :- (14, 4)
+10: .
+11: ~dc1 equals
+12: path(V(1), V(2)) :- (6, 4)
+13: ~dc0 equals
+14: E(V(1), V(2)) :- (13, 4)
+15: .
+16: .
+17: .
+18: .
+19:.
+20:
+21:Press 0 to stop, or 1 to continue
+Line 1 indicates that the query evaluated to true. The remaining lines show a
+nested hierarchy of rules along with the values of the matching constraints that
+triggered the rule. The rules in lines 3 and 5 where generated by the compiler
+to hold the body of the query expression; they can be ignored. Line 7 shows
+++++++++++++++++++++++++++++++++
+194 E.K. Jackson and W. Schulte
+Table 8. Table of domain symbol placement
+Placement of Domain Symbols #
+Kind of Declaration Symbols and Placement #
+Type ::= ... The symbol Typeand the type constant #Typeare placed in
+the root. If declaration is an n-ary constructor declaration then
+type constants #Type[0] , ..., #Type[n-1] are also placed in the
+root.
+{..., Cnst, ... }The new-kind user constant Cnstis placed in the root.
+DerCnst :- ... The derived-kind user constant DerCnst is placed in the names-
+paceD.
+x A variable introduced in a rule is placed in the root namespace.
+Variables can be introduced independently by many rules; thisdoes not cause a conﬂict.
+D.Constant A predeﬁned symbol deﬁned to be the union of all new-kind con-
+stants (including numerics and strings). Placed in the names-paceDalong with D.#Constant .
+D.Data A predeﬁned symbol deﬁned to be the union of all new-kind con-
+stants (including numerics and strings) and data constructors.Placed in the namespace Dalong with D.#Data.
+D.Any A predeﬁned symbol deﬁned to be the union of all types in the
+domain. Placed in the namespace Dalong with D.#Any.
+that a loop path(V(2),V(2)) was proved using the rule at line 6 column 4
+in the domain deﬁnition (i.e. the transitive closure rule). This rule used theproofs of E(V(2),V(1)) (line 9) and path(V(1),V(2)) (line 12). The proof of
+E(V(2),V(1)) comes directly from the model assertion located at (14, 4). The
+proof of path(V(1),V(2)) requires another invocation of the transitive closure
+rule using the model assertion at (13, 4).
+Press 1 key to obtain another proof of the query. Press the 1 key again and
+formula exits the display loop because there are no more proofs to show. In
+fact, this statement is not entirely true; there are inﬁnitely many proof trees
+that prove the loop, but most of them depend on a subproof of a loop and arenot interesting. For instance, once path(V(2),V(2)) is proved, the the transitive
+closure rule can be applied again to obtain another proof for path(V(2),V(2)).
+formula onlyshowsminimalprooftrees,andignores(or cuts)proofscontaining
+a subproof of the property.
+The proof command is a bit more general. It can take a value (without vari-
+ables) and return a truth value and possibly a proof tree. Try:
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 195
+[]>proof 0 path(V(1), V(2))
+T h r e er e s u l t sa r ep o s s i b l e :
+–The truth value can be trueand trees are displayed.
+–The truth value can be falseand no trees are displayed.
+–The truth value can be unknown . This occurs if formula did not evaluate
+enough rules to decide if the value is provable.
+Whenaqueryoperationisexecuted formula willdecidewhichrulesarerelevant
+to the query. It will report the truth value of unknown if the proof command is
+called with a value whose proof might require unexecuted rules. (This can also
+occur if the query execution wa s terminated prematurely.)
+4 Domain and Model Composition
+Domains and models can be combined to build up more complicated mod-
+ules. Domain composition allows type declarations, rules, and conformance con-
+straints to be combined. Model composition allows sets of assertions and aliases
+to be combined.
+4.1 Namespaces
+Tounderstandcomposition,wemustﬁrstdiscusshowsymbolsareorganized.Ev-
+ery symbol sdeclared in a module is placed into a namespace n.T h ec o m p l e t e
+name of a symbol is n.s. We hinted at the existence of namespaces when de-
+scribing derived constants such as RelTrees.hasCycle orDAGs.conforms .T h e y
+also appeared in the symbolic constants Gex’.%v1 andGex’.%e
+ 1
+2.T h e root
+namespace has no name at all. The complete name of a symbol splaced in the
+root namespace is simply s. When modules are composed their namespaces are
+merged. Composition fails if the combined modules declare a symbol with the
+same full name but in semantically diﬀerent ways.
+Every domain Dstarts with two namespaces: the root namespace and a
+namespace D, which is a child of the root. Whether a declaration places sym-
+bols in the root or the Dnamespace depends on the kind of declaration. Table
+8 describes the introduction and pla cement of domain symbols. Note that type
+constants are used to support reﬂection, but we have not discussed them yet.
+Load the ﬁle containing Example 7 ( RelTrees
+ Final)a n dt y p e :
+[]>det RelTrees
+ Final
+You will see the complete set of symbols and their placement into namespaces.
+(Additional compiler generated symbols are listed as well.)
+++++++++++++++++++++++++++++++++
+196 E.K. Jackson and W. Schulte
+1:Symbol table
+2: Space | Name |Arity|Kind
+3:---------------- |----------------- |-------|-------
+4: | Boolean |0|unn
+5: | Context |2|con
+6: | FALSE |0|ncnst
+7: | Integer |0|unn
+8: | LFT |0|ncnst
+9: | Natural |0|unn
+10: |NegInteger |0|unn
+11: | Parent |2|map
+12: |PosInteger |0|unn
+13: | ROOT |0|ncnst
+14: | RT |0|ncnst
+15: | Real |0|unn
+16: | String |0|unn
+17: | TRUE |0|ncnst
+18: | V |1|con
+19: | anc |2|con
+20:RelTrees
+ Final| Any |0|unn
+21:RelTrees
+ Final| Constant |0|unn
+22:RelTrees
+ Final| Data |0|unn
+23:RelTrees
+ Final| conforms |0|dcnst
+24:RelTrees
+ Final|notFunctional |0|dcnst
+25:RelTrees
+ Final|notInjective |0|dcnst
+26:RelTrees
+ Final|notInvTotal |0|dcnst
+27:RelTrees
+ Final|notRelational |0|dcnst
+28:RelTrees
+ Final| notTotal |0|dcnst
+29:RelTrees
+ Final|tooManyChildren |0|dcnst
+30:RelTrees
+ Final|~conforms0 |0|dcnst
+31:RelTrees
+ Final|~conforms1 |0|dcnst
+32:
+33:Type constants: #Boolean #Context #Context[0] #Context[1]
+34: #Integer #Natural #NegInteger #Parent #Parent[0]
+35: #Parent[1] #PosInteger #Real #String #V #V[0]
+36: #anc #anc[0] #anc[1] RelTrees
+ Final.#Any
+37: RelTrees
+ Final.#Constant RelTrees
+ Final.#Data
+38:Symbolic constants:
+39:Rationals:
+40:Strings:
+41:Variables: parent pos u v w x y ~arg1 ~arg2 ~arg2'
+Am o d e l Mof domain Dcontains all the same deﬁnitions as Dbut adds an
+additional namespace called Munder the root. All aliases are placed here as
+symbolic constants.
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 197
+[]>det LittleCycle
+Listing omitted
+1:Symbolic constants: LittleCycle.%v1 LittleCycle.%v2
+Listing omitted
+Altogetherthe LittleCycle model containsthreenamespaces:the rootnamespace
+and two sub-namespaces called DAGsand LittleCycle .
+4.2 Domain Composition
+Domains are composed by writing:
+domain D includes D1, ..., Dn {...}
+Composition imports all the declarations of D1,...,D nintoD. If a symbol is in
+namespace ninDi, then it remains in namespace ninD. If this merging causes
+a symbol to receive contradictory declar ations, then an error is reported. As a
+corollary, importing the same domain s everal times has no eﬀect, because all
+declarations trivially agree. Here is an example of a problematic composition:
+1:domain D1 {q: -X=0 . }
+2:domain D2 {T ::={X}.}
+3:domain D includes D1, D2 {}
+In domain D1the symbol Xis a variable, but in domain D2it is a user constant.
+These declarations are incompatible and an error is returned:
+ex.4ml (3, 23): The symbol X has multiple definitions.
+Here is a more subtle example:
+1:domain D1 {List ::= new (Integer, any List + {NIL}).}
+2:domain D2 {List ::= new (Real, any List + {NIL}).}
+3:domain D includes D1, D2 {}
+Though both domains agree that List(,) is a binary constructor; they disagree
+on the type constraints. However, this composition is legal:
+1:domain D1
+2:{List ::= new (Integer, any List + {NIL}).}
+3:domain D2
+4:{
+5: List ::= new (NegInteger + {0}+ PosInteger, any List + {NIL}).
+6:}
+7:domain D includes D1, D2
+
+++++++++++++++++++++++++++++++++
+198 E.K. Jackson and W. Schulte
+8:{
+9: List ::= new (Integer, any ListOrNone).
+10: ListOrNone ::= List + {NIL}.
+11:}
+ThoughListhas a syntactically diﬀerent deﬁnitions in each domain, all domains
+semantically agree on the values accepted by the List(,) constructor.
+The includes keywordmerges domain declarations. However,it does not force
+the importing domain to satisfy all the domain constraints of the imported do-
+mains. In the previous examples Dcontains rules for computing D.conforms ,
+D1.conforms ,a n dD2.conforms . However, D.conforms need not reﬂect the con-
+formance constraints of D1andD2. (Relation / function constraints will be
+respected, because they occur on type decl arations.) A composite domain au-
+tomatically inherits conformance constraints if the extendskeyword is used in
+place of includes:
+domain D extends D1, ..., Dn {...}
+Consider that the set of all DAGs is a subset of the set of all directed graphs,
+and the set of trees is a subset of the set of DAGs. This chain of restrictions can
+be speciﬁed as follows:
+Example 8 (Classes of graphs).
+1:domain Digraphs
+2:{
+3: V ::= new (lbl: Integer).
+4: E ::= new (src: V, dst: V).
+5:}
+6:
+7:domain DAGs extends Digraphs
+8:{
+9: path ::= (V, V).
+10: path(u, w) :- E(u, w); E(u, v), path(v, w).
+11: conforms no path(u, u).
+12:}
+13:
+14:domain Trees extends DAGs
+15:{
+16: conforms no {w|E(u, w), E(v, w), u != v }.
+17:}
+4.3 The Renaming Operator
+Suppose we would like to build a domain representing two distinct graphs, i.e.
+with two distinct edge and vertex sets. One construction would be the following:
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 199
+1:domain TwoDigraphs
+2:{
+3: V1 ::= new (lbl: Integer).
+4: E1 ::= new (src: V1, dst: V1).
+5:
+6: V2 ::= new (lbl: Integer).
+7: E2 ::= new (src: V2, dst: V2).
+8:}
+The constructors V1() andE1(,) construct elements from the ﬁrst graph and the
+constructors V2() andE2(,) construct elements from the second graph. A model
+would contain vertices and edges that could always be classiﬁed as belonging to
+either the ﬁrst or second graph.
+While this speciﬁcation accomplishes the goal, it is not very satisfying.
+TwoGraphs contains two deep copies of the Digraphs domain, but the construc-
+tors have been renamed in an ad-hoc manner. formula provides a methodolog-
+ical way to accomplish this same task: the renaming operator (‘::’).
+rename::Module
+The renamingoperatorcreates a new mo dule ofthe same kind with a namespace
+called rename.Itcopiesalldeﬁnitionsfrom moduleunderthe renamenamespace,
+and rewrites all copied declarations to reﬂect this renaming. The only symbols
+immune to this operation are new-kind constants, which remain at the root of
+the freshly created module. The renam ing operator has many uses, though we
+only demonstrate a few uses now. The following domain describes the set of all
+pairs of isomorphic DAGs.
+Example 9 (Isomorphic DAGs).
+1:domain IsoDAGs extends Left::DAGs, Right::DAGs
+2:{
+3: Iso ::= bij (Left.V = >Right.V).
+4:
+5: conforms no {e|e is Left.E(u, w),
+6: Iso(u, u'), Iso(w, w'),
+7: no Right.E(u', w') }.
+8: conforms no {e|e is Right.E(u', w'),
+9: Iso(u, u'), Iso(w, w'),
+10: no Left.E(u, w) }.
+11:}
+This domain contains two copies of the DAGsdomain under the renamings Left
+and Right. It contains two vertex constructors called Left.V() and Right.V() as
+well as two edge constructors called Left.E(,) and Right.E(,) . Because IsoDAGs
+extends the renamed domains, the left graph and the right graph must satisfy
+Left.DAGs.conforms andRight.DAGs.conforms respectively. In other words,the
+++++++++++++++++++++++++++++++++
+200 E.K. Jackson and W. Schulte
+constraints on the renamed structures are preserved. Line 3 introduces a new
+bijection for witnessing the isomorphism between the left and the right vertices.
+Notice that the types Left.Vand Right.V are immediately available for use.
+Finally, the two additional conformance constraints require the Isobijection to
+relate the vertices such that Isois a proper isomorphism. Here is a model of the
+domain:
+1:model LittleIso of IsoDAGs
+2:{
+3: v1L is Left.V(1).
+4: v2L is Left.V(2).
+5: v1R is Right.V(1).
+6: v2R is Right.V(2).
+7:
+8: Left.E(v1L, v2L).
+9: Right.E(v2R, v1R).
+10:
+11: Iso(v1L, v2R).
+12: Iso(v2L, v1R).
+13:}
+formula provides several shortcuts to avoid fully qualifying symbols. First, a
+symbol only needs to be qualiﬁed until there is a unique shortest namespace
+containing the symbol. Suppose there are symbols X.f() andX.Y.Z.f(). Then
+f() will be resolved to X.f() because this is the shortest namespace containing
+a symbol called f(). Also, Y.f() will be resolved to X.Y.Z.f() because this is
+the shortest namespace containing a qualiﬁer Yand the symbol f(). Second, the
+resolvednamespaceofaconstructorisappliedtoargumentsofthe constructor.If
+this resolution fails, then resolution restarts from the root namespace. Consider
+this example:
+Left.E(V(1), V(2))
+The outer constructor Left.E(,)i sr e s o l v e dt ob ei nt h e Leftnamespace. Next,
+the inner constructor V() is encountered and name resolution looks for a unique
+shortest qualiﬁer under the Leftnamespace. This succeeds and resolves as
+Left.V(). Thus, we have avoided writing the qualiﬁer Lefton the occurrences
+ofV(). Of course, it is acceptable to fully qualify the inner constructors.
+Left.E(Left.V(1), Left.V(2))
+In this case, the symbol Left.Left.V () does not exist and so name resolution
+restarts from the root and resolves to Left.V().
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 201
+5 Interpreted Functions
+5.1 Arithmetic Functions and Identities
+Table 9. Table of arithmetic functions (I)
+Arithmetic Functions (I)
+Syntax Side Constraints Result#
+-x x : Real −x
+x + y x : Real ,y : Real x+y
+x - y x : Real ,y : Real x−y
+x * y x : Real ,y : Real x·y
+x / y x : Real ,y : Real ,y! =0.x
+y
+x % y x : Real ,y : Real ,y! =0.0≤r<|y|, such that
+∃q∈Z.x=q·y+r.
+count({...}) – The number of elements in {...}.
+gcd(x, y) x : Integer ,y : Integerdef=/braceleftbigg|x|ify=0,
+gcd(y,|x|%|y|).
+gcdAll(x, {...})– The gcd of all integer elements, or
+xif there are no such elements.
+lcm(x, y) x : Integer ,y : Integerdef=/braceleftbigg0if|x|+|y|=0,
+|x·y|/gcd(x,y).
+lcmAll(x, {...})– The lcm of all integer elements, or
+xif there are no such elements.
+max(x, y) – xifx≥y;o t h e r w i s e y.
+maxAll(x, {...})– The largest element of {...}in the
+order of values; xif{...}is empty.
+++++++++++++++++++++++++++++++++
+202 E.K. Jackson and W. Schulte
+Table 10. Table of arithmetic functions (II)
+Arithmetic Functions (II)
+Syntax Side Constraints Result#
+min(x, y) – xifx≤y;o t h e r w i s e y.
+minAll(x, {...})– The smallest element of {...}in
+the order of values; xif{...}is
+empty.
+prod(x, {...})–def=⎧
+⎨
+⎩xif{...}∩R=∅,/productdisplay
+e∈{...}∩Re.
+qtnt(x, y) x : Real ,y : Real ,y! =0.q∈Z,s u c ht h a t
+∃0≤r<|y|.x=q·y+r.
+sign(x) x : Realdef=⎧
+⎨
+⎩−1ifx<0,
+0ifx=0,
+1ifx>0
+sum(x,{...}) –def=⎧
+⎨
+⎩xif{...}∩R=∅,/summationdisplay
+e∈{...}∩Re.
+Table 11. Table of arithmetic identities (LHS-s are not built-in operations)
+Arithmetic Identities
+Left-Hand Side Right-Hand Side #
+abs(x)= max(x,−x).
+ceiling(x)= −qtnt(−x,1).
+floor(x)= qtnt(x,1).
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 203
+5.2 Boolean Functions
+Table 12. Table of Boolean functions
+Boolean Functions
+Syntax Side Constraints Result#
+and(x, y) x : Boolean ,y : Boolean x∧y.
+andAll(x, {...})–def=⎧
+⎨
+⎩xif{...}∩B=∅,/logicalanddisplay
+e∈{...}∩Be.
+impl(x, y) x : Boolean ,y : Boolean ¬x∨y.
+not(x) x : Boolean ¬x.
+or(x, y) x : Boolean ,y : Boolean x∨y.
+orAll(x, {...})–def=⎧
+⎨
+⎩xif{...}∩B=∅,/logicalordisplay
+e∈{...}∩Be.
+++++++++++++++++++++++++++++++++
+204 E.K. Jackson and W. Schulte
+5.3 String Functions
+In the table above, /epsilon1is the empty string and s[i] is the single-character string at
+position iins,f o r0≤i<s t r L e n gt h (s).
+Table 13. Table of string functions
+String Operations
+Syntax Side Constraints Result#
+isSubstring(x, y) x : String, y : String . TRUEifxis a substring of y;
+FALSEotherwise. The empty string
+is only a substring of itself.
+strAfter(x, y) x : String ,y : Natural . Returns the largest substring start-
+ing at position y,o r/epsilon1ify≥
+strLength (x).
+strBefore(x, y) x : String ,y : Natural . Returns the largest substring end-
+ing before position y,o r/epsilon1ify=0.
+strFind(x, y, z) x : String, y : String . Returns the index of the ﬁrst oc-
+currence of xiny;zifynever
+appears.
+strFindAll(x, y,
+z, w)xis aw-terminated natural-list
+type constant #F.y : String ,
+z : String .Returns a w-terminated F/prime-list of
+all the indices where yoccurs in z;
+wif it never occurs.
+strGetAt(x, y) x : String ,y : Natural .def=/braceleftbiggx[y]ify < strLength (x),
+/epsilon1otherwise ..
+strJoin(x, y) x : String, y : String .def=⎧
+⎨
+⎩yifx=/epsilon1,
+xify=/epsilon1,
+xyotherwise ..
+strLength(x) x : String . Returns the length of x.
+strLower(x) x : String . Returns the all-lower-case version
+ofx.
+strReverse(x) x : String . Returns the reverse of x.
+strUpper(x) x : String . Returns the all-upper-case version
+ofx.
+++++++++++++++++++++++++++++++++
+FORMULA 2.0: A Language for Formal Speciﬁcations 205
+5.4 List Functions
+Alist constructor is a constructor F ::= (T0, T1) such that Fis a subtype of
+T1.AT-list constructor is a list constructor such that Tis a subtype of T0.A
+list type constant #Fis a type constant such that Fis a list constructor. A list is
+ﬂatif it hasnelements placed as follows:
+F(t0,F(t1,...,F(tn−1,w)...))
+The value wis called the terminator . In the table below all operations, except
+forisSubTerm andlstFlatten , assume ﬂat lists.
+Table 14. Table of list functions
+List Functions
+Syntax Side Constraints Result#
+isSubterm(x, y) – TRUEifxis a subterm of y;
+FALSEotherwise. .
+lstAfter(x, y, z, w) xis aw-terminated list
+type constant #F,z:
+Natural.yify/negationslash=F(...);wifz≥
+lstLength (y);aw-terminated F-list
+of all the elements at and after z.
+lstBefore(x, y,
+z, w)xis aw-terminated list
+type constant #F,z:
+Natural.yify/negationslash=F(...);wifz≤0;aw-
+terminated F-list of all the elements
+beforez.
+lstFind(x, y, z, w) xis a list type constant #F. The ﬁrst place where zoccurs in the
+F-listy;wifznever occurs.
+lstFindAll(x, x’, y,
+z, w)xis a list type constant
+#F,x/primeis aw-terminated
+natural-list type constant#F’.Returns a w-terminated F
+/prime-list of all
+the indices where zoccurs in y;wif
+it never occurs.
+lstFlatten(x, y, w) xis aw-terminated list
+type constant #F.Converts yintow-terminated ﬂat
+form ify=F(...);yotherwise.
+lstGetAt(x, y, z) z : Natural ,
+z < lstLength(x, y) .def=/braceleftbigghiflstGetAt (x,F(h,t),0),
+lstGetAt (x,t,z−1).
+lstLength(x, y) xis a list type
+constant #F.def=/braceleftbigg0ify/negationslash=F(h,t),
+1+lstLength (t).
+lstReverse(x, y) xis a list type
+constant #F.yify/negationslash=F(...); otherwise reverses
+t h el i s tr e u s i n gt h es a m et e r m i n a t o r
+++++++++++++++++++++++++++++++++
+206 E.K. Jackson and W. Schulte
+5.5 Coercion Functions
+In the table to follow, a list type constant #Fis a type constant such that F ::=
+(T1, T2) andF< :T 2.
+Table 15. Table of coercion functions
+Coercion Functions
+Syntax Side Constraints Result#
+toList(x, y, {...})xis a list type constant, y : T2. F(t1,...,F(tn,y)...)where
+tiare the sorted elements of
+{...}accepted by T1.O ryif no
+element is accepted.
+toNatural(x) – Returns a unique natural for the
+valuex.
+toString(x) – Returns a unique string for the
+valuex.
+toSymbol(x) – Returns xifxis a constant;
+#Fforx=F(...).
+5.6 Reﬂection Functions
+Table 16. Table of reﬂection functions
+Reﬂection Functions
+Syntax Side Constraints Result#
+rflGetArgType(x, y) xis a type constant #F,
+y : Natural ,
+y < rflGetArity(x) .Returns #F[y],w h e r e F ::=
+(T0,...,Tn−1)
+rflGetArity(x) xis a type constant #X. Returns nif X ::=
+(T0,...,Tn−1); 0 otherwise.
+rflIsMember(x, y) yis a type constant #Y.TRUEifxis a member of Y;
+FALSEotherwise.
+rflIsSubtype(x, y) xis a type constant #X,
+yis a type constant #Y.TRUEifXis a subtype of Y;
+FALSEotherwise.
+++++++++++++++++++++++++++++++++
+domain SimpleTarParser
+{
+  Header ::= new (name: Integer, size: Integer).
+  Offset ::= new (name: Integer, pos: Integer).
+  Start  ::= new (name: Integer).
+  Done  ::= new (name: Integer, seq: Integer).
+
+  Done(nextName, 0) :- s is Start(currName), 
+                          currHeader is Header(currName, size),
+                          currOffset is Offset(currName, pos),
+                          nextPos = pos + size + 512,
+                          nextOffset is Offset(nextName, nextPos).
+                          
+  Done(nextName, nextSeq) :- s is Done(currName, seq), nextSeq = seq + 1,
+                          currHeader is Header(currName, size),
+                          currOffset is Offset(currName, pos),
+                          nextPos = pos + size + 512,
+                          nextOffset is Offset(nextName, nextPos).
+
+  badHeader :- h is Header, h.size < 0.
+
+  // Must have exactly one StartHeader
+  tooManyDone :- h is Header, name = h.name,
+                    count({d | d is Done(name, _)}) > 1. 
+  
+  // conforms no tooManyDone, no badHeader.
+}
+
+partial model pm of SimpleTarParser
+[solver_RecursionBound = 5]
+{
+  h1 is Header(100, 512).
+  h1Offset is Offset(100, 0).
+  Start(100).
+  
+  h2 is Header(101, x).
+  h2Offset is Offset(101, 1024).
+}
+
+domain StringBasedParser {
+    // Define constants for parsing status
+    Status ::= {INIT, READ, UPDATE, DONE}.
+
+    // Data constructor for the initial input data
+    InputData ::= new (name: String, data: String).
+
+    // Data constructor for the parsing context that includes the input data, status, current position, and offset.
+    State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
+
+    // Data constructor for intermediate results that are derived during parsing.
+    IntermediateResult ::= new (name: String, context: State, derivedResult: String + Integer + { NULL }).
+
+    // Derived constants to check parsing conditions
+    canReadMore :- State(InputData(_, data), READ, pos, offset), 
+        length = strLength(data), pos + offset < length.
+
+    isDone :- State(_, DONE, _, _).
+
+    // Rule to initialize the parser with no intermediate results
+    State(initData, INIT, 0, 0) :- initData is InputData(_, data).
+
+    // Rule to initialize the parser
+    State(inputData, READ, pos, offset) :- 
+        inputData is InputData(_, data),
+        State(inputData, INIT, 0, 0),
+        pos = 0,  // Start reading from the beginning
+        offset = 0. // Start with no offset
+
+    // Rule to read the next block
+    State(inputData, READ, newPos, newOffset) :-
+        State(inputData, READ, pos, offset), 
+        canReadMore,
+        newPos = pos + 1, // Change this logic as needed
+        newOffset = offset + 2. // Change this logic as needed
+
+    // Rule to update intermediate results from current read and the new status is UPDATE
+    IntermediateResult(name, newState, newDerivedResult) :-
+        inputData is InputData(_, data),
+        state is State(inputData, READ, pos, offset), 
+        newState = State(inputData, UPDATE, pos, offset),
+        IntermediateResult(name, state, derivedResult),
+        curRead = toNatural(strGetAt(data, pos)), // Change this logic as needed
+        newDerivedResult = derivedResult + curRead. // Change this logic as needed
+
+    // Rule to derive intermediate result from previous intermediate results
+    IntermediateResult(name, newState, newDerivedResult) :-
+        state is State(inputData, _, pos, offset),
+        newState is State(inputData, UPDATE, pos, offset), 
+        IntermediateResult(name, state, oldDerivedResult),
+        newDerivedResult = oldDerivedResult + 1. // Change this logic as needed
+
+    // Rule to move to done state
+    State(inputData, DONE, pos, offset) :-
+        inputData is InputData(_, data),
+        State(inputData, READ, pos, offset), 
+        length = strLength(data),
+        pos >= length. // If the end is reached
+}
+
+// A parser domain with dependent data types and intermediate results
+domain GenericDataParser {
+    // Define constants for parsing status
+    Status ::= {INIT, READ, UPDATE, DONE}.
+
+    // A byte represented as an integer in the range of 0-255.
+    Byte ::= new (val: Natural).
+    Bytes ::= new (item: Byte, nxt: any Bytes + { NULL }).
+    // Input data are bytes represented as a list of Byte.
+    InputData ::= new (name: String, data: Bytes).
+
+    // Parsing state that the includes the input data, status, current position, and offset.
+    State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
+
+    // Intermediate results that are derived during parsing and the derived result could have my types.
+    IntermediateResult ::= new (name: String, context: State, derivedResult: String + Integer + { NULL }).
+
+    // Decide the new offset and pos based on current state.
+    NextOffset ::= new (state: State, offset: Integer).
+    NextPos ::= new (state: State, pos: Integer).
+    DeriveIntermediateResult ::= new (name: String, state: State, result: String + Integer + { NULL }).
+
+    // Derived constants to check parsing conditions
+    canReadMore :- State(InputData(_, data), READ, pos, offset), 
+        length = lstLength(#Bytes, data), pos + offset < length.
+
+    // Rule to move to done state
+    State(inputData, DONE, pos, offset) :-
+        inputData is InputData(_, data),
+        State(inputData, READ, pos, offset), 
+        length = lstLength(#Bytes, data),
+        offset + pos >= length.
+
+    isDone :- State(_, DONE, _, _).
+
+    // Rule to initialize the parser with no intermediate results, but you can add them as needed.
+    State(initData, INIT, 0, 0) :- initData is InputData(_, data). // Change this logic as needed
+
+    // Rule to read the next block of data based on the NextPos and NextOffset.
+    State(inputData, READ, newPos, newOffset) :-
+        state is State(inputData, READ, pos, offset), 
+        NextPos(state, newPos),
+        NextOffset(state, newOffset),
+        canReadMore.
+    
+    // Rule to update intermediate results from current read and other intermediate results.
+    // The new status is changed from READ to UPDATE while keeping other parameters the same.
+    IntermediateResult(name, newState, newDerivedResult) :-
+        inputData is InputData(_, data),
+        state is State(inputData, READ, pos, offset), 
+        IntermediateResult(name, state, derivedResult),
+        newState = State(inputData, UPDATE, pos, offset),
+        DeriveIntermediateResult(name, newState, newDerivedResult).
+        // curRead = toNatural(lstGetAt(#Bytes, data, pos + offset)),
+}
+
+domain TinyDemoParser extends GenericDataParser {
+    // Rule to initialize parsing and read the initial header or meta info.
+    State(inputData, READ, pos, offset) :- State(inputData, INIT, 0, 0),
+        pos = 0, offset = 1. 
+
+    // Read the header and update the intermediate result with the count of numbers to read next.
+    // Read only one byte for the header.
+    NextOffset(state, newOffset) :- state is State(_, READ, 0, _),
+        newOffset = 1. 
+
+    // Initialize the intermediate result "count" to the number in the first byte at the initial state.
+    DeriveIntermediateResult("count", state, initialCount) :-
+        inputData is InputData(_, Bytes(Byte(asciiAsInt), _)),
+        state is State(inputData, READ, 0, _), 
+        // TODO: This is a temporary workaround for ASCII conversion
+        initialCount = asciiAsInt - 48.
+
+    // Initialize the intermediate result "sum" to 0 at the initial state.
+    DeriveIntermediateResult("sum", state, initialSum) :-
+        inputData is InputData(_, data), 
+        state is State(inputData, _, 0, _),
+        initialSum = 0.
+
+    // Decide how many bytes to read next after the header is read.
+    // Here we should read N bytes where N is the number we read from the header.
+    // But for simplicity, we just read one byte at a time.
+    NextOffset(state, newOffset) :- state is State(inputData, READ, pos, offset), 
+        pos > 0, newOffset = 1.
+        //inputData is InputData(_, data),
+        //byte = lstGetAt(#Bytes, data, 0),
+        //newOffset = byte.val - 48.
+        
+    // Update the intermediate result "sum" with a new number extracted and added.
+    DeriveIntermediateResult("sum", newState, newSum) :- 
+        inputData is InputData(_, data), 
+        oldState is State(inputData, READ, pos, offset),
+        newState is State(inputData, UPDATE, pos, offset),
+        pos > 0,
+        NextOffset(state, offset),
+        IntermediateResult("sum", oldState, oldSum),
+        // TODO: This is a temporary workaround for ASCII conversion.
+        // TODO: This constraint is unsatisfiable.
+        //byte = lstGetAt(#Bytes, data, pos),
+        //byte.val > 35, // ASCII 35 is '#' and should be skipped.
+        //newSum = oldSum + byte.val - 48.
+        newSum = oldSum + 1.
+
+    // The next position is the current position plus the offset unless you want to skip some bytes.
+    NextPos(state, newPos) :- state is State(inputData, READ, pos, offset), newPos = pos + offset.
+    
+}
+
+model m of TinyDemoParser {
+    // Format: |header|#|digits| |header|#|digits| ...
+    // The byte in the header decides how many digits to read and it will return the sum.
+    // The header and the digits are separated by '#' and each expression is separated by space.
+    // Example: "3#1234 3#45" 
+    // "51(3) 35(#) 49(1) 50(2) 51(3) 52(4) 32(SPACE) 51(3) 35(#) 52(4) 53(5)" in ASCII format
+    inputData is InputData("sample", 
+        Bytes(Byte(51), 
+        Bytes(Byte(35), 
+        Bytes(Byte(49), 
+        Bytes(Byte(50), 
+        Bytes(Byte(51),
+        Bytes(Byte(52),
+        Bytes(Byte(32), 
+        Bytes(Byte(51), 
+        Bytes(Byte(35),
+        Bytes(Byte(52), 
+        Bytes(Byte(53), NULL)))))))))))).
+
+    initState is State(inputData, INIT, 0, 0). 
+    initSum is IntermediateResult("sum", initState, 0).
+}
+
+model m2 of StringBasedParser {
+    inputData is InputData("sample", "123456789").
+    initState is State(inputData, INIT, 0, 0). 
+    initSum is IntermediateResult("sum", initState, 0).
+}
+
+partial model pm2 of GenericDataParser
+[solver_RecursionBound = 5]
+{
+    InputData("sample", x).
+}
+++++++++++++++++++++++++++++++++
+static	char	const	rcsid[] = "$Id: untar.c,v 1.35 2007/02/12 20:46:09 njh Exp $";
+
+#if HAVE_CONFIG_H
+#include "clamav-config.h"
+#endif
+
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
+#ifdef	HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <sys/stat.h>
+#include <fcntl.h>
+#ifdef	HAVE_SYS_PARAM_H
+#include <sys/param.h>	/* for NAME_MAX */
+#endif
+
+#include "clamav.h"
+#include "others.h"
+#include "untar.h"
+#include "mbox.h"
+#include "blob.h"
+#include "scanners.h"
+
+#define BLOCKSIZE 512
+
+#ifndef	O_BINARY
+#define	O_BINARY	0
+#endif
+
+static int
+octal(const char *str)
+{
+	int ret;
+
+	if(sscanf(str, "%o", (unsigned int *)&ret) != 1)
+		return -1;
+	return ret;
+}
+
+int
+cli_untar(const char *dir, int desc, unsigned int posix, cli_ctx *ctx)
+{
+	int size = 0, ret, fout=-1;
+	int in_block = 0;
+	unsigned int files = 0;
+	char fullname[NAME_MAX + 1];
+
+	cli_dbgmsg("In untar(%s, %d)\n", dir, desc);
+
+	for(;;) {
+		char block[BLOCKSIZE];
+		const int nread = cli_readn(desc, block, (unsigned int)sizeof(block));
+
+		if(!in_block && nread == 0)
+			break;
+
+		if(nread < 0) {
+			if(fout>=0)
+				close(fout);
+			cli_errmsg("cli_untar: block read error\n");
+			return CL_EREAD;
+		}
+
+		if(!in_block) {
+			char type;
+			int directory, skipEntry = 0;
+			char magic[7], name[101], osize[13];
+
+			if(fout>=0) {
+				lseek(fout, 0, SEEK_SET);
+				ret = cli_magic_scandesc(fout, ctx);
+				close(fout);
+				if (!ctx->engine->keeptmp)
+					if (cli_unlink(fullname)) return CL_EUNLINK;
+				if (ret==CL_VIRUS)
+					return CL_VIRUS;
+				fout = -1;
+			}
+
+			if(block[0] == '\0')	/* We're done */
+				break;
+			if((ret=cli_checklimits("cli_untar", ctx, 0, 0, 0))!=CL_CLEAN)
+				return ret;
+
+			/* Notice assumption that BLOCKSIZE > 262 */
+			if(posix) {
+				strncpy(magic, block+257, 5);
+				magic[5] = '\0';
+				if(strcmp(magic, "ustar") != 0) {
+					cli_dbgmsg("cli_untar: Incorrect magic string '%s' in tar header\n", magic);
+					return CL_EFORMAT;
+				}
+			}
+
+			type = block[156];
+
+			switch(type) {
+				default:
+					cli_dbgmsg("cli_untar: unknown type flag %c\n", type);
+				case '0':	/* plain file */
+				case '\0':	/* plain file */
+				case '7':	/* contiguous file */
+				case 'M':	/* continuation of a file from another volume; might as well scan it. */
+					files++;
+					directory = 0;
+					break;
+				case '1':	/* Link to already archived file */
+				case '5':	/* directory */
+				case '2':	/* sym link */
+				case '3':	/* char device */
+				case '4':	/* block device */
+				case '6':	/* fifo special */
+				case 'V':	/* Volume header */
+					directory = 1;
+					break;
+				case 'K':
+				case 'L':
+					/* GNU extension - ././@LongLink
+					 * Discard the blocks with the extended filename,
+					 * the last header will contain parts of it anyway
+					 */
+				case 'N': 	/* Old GNU format way of storing long filenames. */
+				case 'A':	/* Solaris ACL */
+				case 'E':	/* Solaris Extended attribute s*/
+				case 'I':	/* Inode only */
+				case 'g':	/* Global extended header */
+				case 'x': 	/* Extended attributes */
+				case 'X':	/* Extended attributes (POSIX) */
+					directory = 0;
+					skipEntry = 1;
+					break;
+			}
+
+			if(directory) {
+				in_block = 0;
+				continue;
+			}
+
+			strncpy(osize, block+124, 12);
+			osize[12] = '\0';
+			size = octal(osize);
+			if(size < 0) {
+				cli_dbgmsg("cli_untar: Invalid size in tar header\n");
+				skipEntry++;
+			} else {
+				cli_dbgmsg("cli_untar: size = %d\n", size);
+				if((ret=cli_checklimits("cli_untar", ctx, size, 0, 0))!=CL_CLEAN)
+					skipEntry++;
+			}
+
+			if(skipEntry) {
+				const int nskip = (size % BLOCKSIZE || !size) ? size + BLOCKSIZE - (size % BLOCKSIZE) : size;
+
+				cli_dbgmsg("cli_untar: skipping entry\n");
+				lseek(desc, nskip, SEEK_CUR);
+				continue;
+			}
+
+			strncpy(name, block, 100);
+			name[100] = '\0';
+			snprintf(fullname, sizeof(fullname)-1, "%s/tar%02u", dir, files);
+			fullname[sizeof(fullname)-1] = '\0';
+			fout = open(fullname, O_RDWR|O_CREAT|O_EXCL|O_TRUNC|O_BINARY, 0600);
+
+			if(fout < 0) {
+				char err[128];
+				cli_errmsg("cli_untar: Can't create temporary file %s: %s\n", fullname, cli_strerror(errno, err, sizeof(err)));
+				return CL_ETMPFILE;
+			}
+
+			cli_dbgmsg("cli_untar: extracting to %s\n", fullname);
+
+			in_block = 1;
+		} else { /* write or continue writing file contents */
+			const int nbytes = size>512? 512:size;
+			const int nwritten = (int)write(fout, block, (size_t)nbytes);
+
+			if(nwritten != nbytes) {
+				cli_errmsg("cli_untar: only wrote %d bytes to file %s (out of disc space?)\n",
+					nwritten, fullname);
+				close(fout);
+				return CL_EWRITE;
+			}
+			size -= nbytes;
+		}
+		if (size == 0)
+			in_block = 0;
+        }	
+	if(fout>=0) {
+		lseek(fout, 0, SEEK_SET);
+		ret = cli_magic_scandesc(fout, ctx);
+		close(fout);
+		if (!ctx->engine->keeptmp)
+			if (cli_unlink(fullname)) return CL_EUNLINK;
+		if (ret==CL_VIRUS)
+			return CL_VIRUS;
+	}
+	return CL_CLEAN;
+}
+
+****************************************************************
+Questions: 
+1. Understand the C code in untar_negsize.c, FORMULA documentation and ParserDSL.4ml.                 2. Model untar_negsize.c in FORMULA by modifying the StringBasedParser domain in ParserDSL.4ml.                 3. Do not change the existing type definition in StringBasedParser domain such as Status and IntermediateResult.                 4. Change at place commented with 'Change the logic if needed' and add more rules if needed.                 5. Use strJoin() in FORMULA to concatenate strings.                 6. Feel free to replace the `name` parameter with actual variable name in IntermediateResult in the rules.                 7. Model `skipEntry` as IntermediateResult in FORMULA and reflect how its value affects the parsing.                 8. Model how `skipEntry` is computed from other IntermediateResults or the current read.
+****************************************************************
+Response: 
+To model the `untar_negsize.c` functionality into the `StringBasedParser` domain within `ParserDSL.4ml`, we'll focus on simulating the behavior of reading blocks, handling file types, and managing the `skipEntry` logic using `IntermediateResult`. Below is a modified version of the `StringBasedParser` domain to reflect the untar logic:
+
+```formula
+domain StringBasedParser {
+    // Define constants for parsing status
+    Status ::= {INIT, READ, UPDATE, DONE}.
+
+    // Data constructor for the initial input data
+    InputData ::= new (name: String, data: String).
+
+    // Data constructor for the parsing context that includes the input data, status, current position, and offset.
+    State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
+
+    // Data constructor for intermediate results that are derived during parsing.
+    IntermediateResult ::= new (name: String, context: State, derivedResult: String + Integer + { NULL }).
+
+    // Derived constants to check parsing conditions
+    canReadMore :- State(InputData(_, data), READ, pos, offset), 
+        length = strLength(data), pos + offset < length.
+
+    isDone :- State(_, DONE, _, _).
+
+    // Rule to initialize the parser with no intermediate results
+    State(initData, INIT, 0, 0) :- initData is InputData(_, data).
+
+    // Rule to initialize the parser
+    State(inputData, READ, pos, offset) :- 
+        inputData is InputData(_, data),
+        State(inputData, INIT, 0, 0),
+        pos = 0,  // Start reading from the beginning
+        offset = 0. // Start with no offset
+
+    // Rule to read the next block
+    State(inputData, READ, newPos, newOffset) :-
+        State(inputData, READ, pos, offset), 
+        canReadMore,
+        newPos = pos + 512, // Read block size
+        newOffset = offset + 512. // Move to next block
+
+    // Rule to decide skip entry based on current read
+    IntermediateResult("skipEntry", state, skipEntry) :-
+        state is State(inputData, READ, pos, offset),
+        inputData is InputData(_, data),
+        curType = strGetAt(data, pos + 156), // Type flag position
+        curSizeStr = strGetAt(data, pos + 124), // Size position
+        curSize = toNatural(curSizeStr),
+        curType in {"1", "2", "3", "4", "5", "6", "V", "K", "L", "N", "A", "E", "I", "g", "x", "X"},
+        skipEntry = 1. // Skip certain types
+
+    // If size is negative, skip the entry
+    IntermediateResult("skipEntry", state, skipEntry) :-
+        state is State(inputData, READ, pos, offset),
+        inputData is InputData(_, data),
+        curSizeStr = strGetAt(data, pos + 124),
+        curSize = toNatural(curSizeStr),
+        curSize < 0,
+        skipEntry = 1.
+
+    // Rule to update intermediate results from current read
+    IntermediateResult("curFileName", state, curFileName) :-
+        state is State(inputData, READ, pos, offset),
+        inputData is InputData(_, data),
+        curName = strBefore(data, pos + 100),
+        curFileName = strJoin("FileName: ", curName).
+
+    // Rule to set done state
+    State(inputData, DONE, pos, offset) :-
+        inputData is InputData(_, data),
+        State(inputData, READ, pos, offset), 
+        length = strLength(data),
+        pos >= length. // If the end is reached
+}
+```
+
+### Explanation:
+1. **Initialization**: The parser starts in the `INIT` state, moving to `READ` with the initial position and offset set to zero.
+
+2. **Reading and Offset Management**: The `READ` state updates the position and offset by the block size (512 bytes) to mimic reading a TAR block.
+
+3. **Skip Entry Logic**: 
+   - The `skipEntry` logic is modeled as an `IntermediateResult`. It skips entries based on the file type or if the size is negative.
+   - The type flag and size are extracted from specific positions in the data string, similar to how the C code reads from a block.
+
+4. **File Name Extraction**: An `IntermediateResult` captures the current file name being processed, using `strJoin` to prepend a label to the extracted name.
+
+5. **Done State**: The transition to `DONE` occurs when the reading position exceeds the data length.
+
+This model simulates the key aspects of untarring, including handling different file types and managing the skip logic. Adjustments may be needed based on more specifics of how you want to handle the data and states in the FORMULA model.
+****************************************************************
+Additional question: 
+IntermediateResult `skipEntry` may affect the rule to read the next block.
+****************************************************************
+Response: 
+To model `untar_negsize.c` in FORMULA, we need to ensure that the `skipEntry` logic influences whether the parser reads the next block. We'll do this by adjusting the `StringBasedParser` domain in `ParserDSL.4ml`. Below is the revised domain, incorporating the `skipEntry` IntermediateResult and using it to control the parsing logic:
+
+```formula
+domain StringBasedParser {
+    // Define constants for parsing status
+    Status ::= {INIT, READ, UPDATE, DONE}.
+
+    // Data constructor for the initial input data
+    InputData ::= new (name: String, data: String).
+
+    // Data constructor for the parsing context that includes the input data, status, current position, and offset.
+    State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
+
+    // Data constructor for intermediate results that are derived during parsing.
+    IntermediateResult ::= new (context: State, derivedResult: String + Integer + { NULL }).
+
+    // Derived constants to check parsing conditions
+    canReadMore :- State(InputData(_, data), READ, pos, offset), 
+        length = strLength(data), pos + offset < length.
+
+    isDone :- State(_, DONE, _, _).
+
+    // Rule to initialize the parser with no intermediate results
+    State(initData, INIT, 0, 0) :- initData is InputData(_, data).
+
+    // Rule to initialize the parser
+    State(inputData, READ, pos, offset) :- 
+        inputData is InputData(_, data),
+        State(inputData, INIT, 0, 0),
+        pos = 0,  // Start reading from the beginning
+        offset = 0. // Start with no offset
+
+    // Rule to compute skipEntry based on type and size
+    IntermediateResult(state, skipEntry) :- 
+        state is State(inputData, READ, pos, offset),
+        inputData is InputData(_, data),
+        curType = strGetAt(data, pos + 156), // Type flag position
+        curSizeStr = strGetAt(data, pos + 124), // Size position
+        curSize = toNatural(curSizeStr),
+        (curType in {"1", "2", "3", "4", "5", "6", "V", "K", "L", "N", "A", "E", "I", "g", "x", "X"} || curSize < 0),
+        skipEntry = 1.
+
+    // Rule to read the next block if skipEntry is not set
+    State(inputData, READ, newPos, newOffset) :-
+        State(inputData, READ, pos, offset), 
+        IntermediateResult(_, skipEntry),
+        skipEntry = 0, // Only read if skipEntry is not set
+        canReadMore,
+        newPos = pos + 512, // Change this logic as needed
+        newOffset = offset + 512. // Change this logic as needed
+
+    // Rule to update intermediate results from current read
+    IntermediateResult(state, curFileName) :-
+        state is State(inputData, READ, pos, offset),
+        inputData is InputData(_, data),
+        curName = strBefore(data, pos + 100),
+        curFileName = strJoin("FileName: ", curName).
+
+    // Rule to set done state
+    State(inputData, DONE, pos, offset) :-
+        inputData is InputData(_, data),
+        State(inputData, READ, pos, offset), 
+        length = strLength(data),
+        pos >= length. // If the end is reached
+}
+```
+
+### Explanation:
+1. **Initialization**: The parser begins in the `INIT` state and transitions to `READ` as before.
+
+2. **`skipEntry` Logic**: 
+   - `skipEntry` is modeled as an `IntermediateResult`. It's computed based on the type flag and size from the current block.
+   - If the type is among those that should be skipped or if the size is negative, `skipEntry` is set to 1.
+
+3. **Reading the Next Block**: 
+   - The `State` transition from `READ` to the next block is conditional on `skipEntry` being 0. This means the block is only read if it shouldn't be skipped.
+
+4. **File Name Extraction**: Uses `strJoin` to concatenate a label to the current file name.
+
+5. **Completion**: The `DONE` state is reached when the position exceeds the data length.
+
+This model reflects the logic of `untar_negsize.c` by incorporating how `skipEntry` affects whether the parser continues reading blocks. Adjustments can be further made to fine-tune the logic based on additional requirements or insights from the C code.
