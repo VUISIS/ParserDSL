@@ -37,6 +37,66 @@ partial model pm of SimpleTarParser
   h2Offset is Offset(101, 1024).
 }
 
+domain StringBasedParser {
+    // Define constants for parsing status
+    Status ::= {INIT, READ, UPDATE, DONE}.
+
+    // Data constructor for the initial input data
+    InputData ::= new (name: String, data: String).
+
+    // Data constructor for the parsing context that includes the input data, status, current position, and offset.
+    State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
+
+    // Data constructor for intermediate results that are derived during parsing.
+    IntermediateResult ::= new (name: String, context: State, derivedResult: String + Integer + { NULL }).
+
+    // Derived constants to check parsing conditions
+    canReadMore :- State(InputData(_, data), READ, pos, offset), 
+        length = strLength(data), pos + offset < length.
+
+    isDone :- State(_, DONE, _, _).
+
+    // Rule to initialize the parser with no intermediate results
+    State(initData, INIT, 0, 0) :- initData is InputData(_, data).
+
+    // Rule to initialize the parser
+    State(inputData, READ, pos, offset) :- 
+        inputData is InputData(_, data),
+        State(inputData, INIT, 0, 0),
+        pos = 0,  // Start reading from the beginning
+        offset = 0. // Start with no offset
+
+    // Rule to read the next block
+    State(inputData, READ, newPos, newOffset) :-
+        State(inputData, READ, pos, offset), 
+        canReadMore,
+        newPos = pos + 1, // Change this logic as needed
+        newOffset = offset + 2. // Change this logic as needed
+
+    // Rule to update intermediate results from current read and the new status is UPDATE
+    IntermediateResult(name, newState, newDerivedResult) :-
+        inputData is InputData(_, data),
+        state is State(inputData, READ, pos, offset), 
+        newState = State(inputData, UPDATE, pos, offset),
+        IntermediateResult(name, state, derivedResult),
+        curRead = toNatural(strGetAt(data, pos)), // Change this logic as needed
+        newDerivedResult = derivedResult + curRead. // Change this logic as needed
+
+    // Rule to derive intermediate result from previous intermediate results
+    IntermediateResult(name, newState, newDerivedResult) :-
+        state is State(inputData, _, pos, offset),
+        newState is State(inputData, UPDATE, pos, offset), 
+        IntermediateResult(name, state, oldDerivedResult),
+        newDerivedResult = oldDerivedResult + 1. // Change this logic as needed
+
+    // Rule to move to done state
+    State(inputData, DONE, pos, offset) :-
+        inputData is InputData(_, data),
+        State(inputData, READ, pos, offset), 
+        length = strLength(data),
+        pos >= length. // If the end is reached
+}
+
 // A parser domain with dependent data types and intermediate results
 domain GenericDataParser {
     // Define constants for parsing status
@@ -128,15 +188,17 @@ domain TinyDemoParser extends GenericDataParser {
     // Update the intermediate result "sum" with a new number extracted and added.
     DeriveIntermediateResult("sum", newState, newSum) :- 
         inputData is InputData(_, data), 
-        newState is State(inputData, UPDATE, pos, offset),
         oldState is State(inputData, READ, pos, offset),
+        newState is State(inputData, UPDATE, pos, offset),
         pos > 0,
         NextOffset(state, offset),
         IntermediateResult("sum", oldState, oldSum),
-        // TODO: This is a temporary workaround for ASCII conversion
-        byte = lstGetAt(#Bytes, data, pos) - 48,
-        newSum = oldSum + byte.val,
-        byte.val > 35. // ASCII 35 is '#' and should be skipped.
+        // TODO: This is a temporary workaround for ASCII conversion.
+        // TODO: This constraint is unsatisfiable.
+        //byte = lstGetAt(#Bytes, data, pos),
+        //byte.val > 35, // ASCII 35 is '#' and should be skipped.
+        //newSum = oldSum + byte.val - 48.
+        newSum = oldSum + 1.
 
     // The next position is the current position plus the offset unless you want to skip some bytes.
     NextPos(state, newPos) :- state is State(inputData, READ, pos, offset), newPos = pos + offset.
@@ -162,6 +224,12 @@ model m of TinyDemoParser {
         Bytes(Byte(52), 
         Bytes(Byte(53), NULL)))))))))))).
 
+    initState is State(inputData, INIT, 0, 0). 
+    initSum is IntermediateResult("sum", initState, 0).
+}
+
+model m2 of StringBasedParser {
+    inputData is InputData("sample", "123456789").
     initState is State(inputData, INIT, 0, 0). 
     initSum is IntermediateResult("sum", initState, 0).
 }

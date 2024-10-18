@@ -1,0 +1,83 @@
+domain StringBasedTarParser {
+    // Define constants for parsing status
+    Status ::= {INIT, READ, UPDATE, DONE}.
+
+    // Data constructor for the initial input data
+    InputData ::= new (name: String, data: String).
+
+    // Data constructor for the parsing context that includes the input data, status, current position, and offset.
+    State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
+
+    // Data constructor for intermediate results that are derived during parsing.
+    // TODO: Fix an type definition error that `name` was skipped when generating the code.
+    IntermediateResult ::= new (name: String, context: State, derivedResult: String + Integer + { NULL }).
+
+    // Derived constants to check parsing conditions
+    canReadMore :- State(InputData(_, data), READ, pos, offset), 
+        length = strLength(data), pos + offset < length.
+
+    isDone :- State(_, DONE, _, _).
+
+    // Rule to initialize the parser with no intermediate results
+    State(initData, INIT, 0, 0) :- initData is InputData(_, data).
+
+    // Rule to initialize the parser
+    State(inputData, READ, pos, offset) :- 
+        inputData is InputData(_, data),
+        State(inputData, INIT, 0, 0),
+        pos = 0,  // Start reading from the beginning
+        offset = 0. // Start with no offset
+
+    // TODO: Comment out because the grammar is wrong and this part is not very relevant.
+    // Rule to compute skipEntry based on type and size
+    // IntermediateResult(state, skipEntry) :- 
+    //     state is State(inputData, READ, pos, offset),
+    //     inputData is InputData(_, data),
+    //     curType = strGetAt(data, pos + 156), // Type flag position
+    //     curSizeStr = strGetAt(data, pos + 124), // Size position
+    //     curSize = toNatural(curSizeStr),
+    //     (curType in {"1", "2", "3", "4", "5", "6", "V", "K", "L", "N", "A", "E", "I", "g", "x", "X"} || curSize < 0),
+    //     skipEntry = 1.
+
+    // If size is negative, skip the entry
+    IntermediateResult("skipEntry", state, skipEntry) :-
+        state is State(inputData, READ, pos, offset),
+        inputData is InputData(_, data),
+        // TODO: Here we have to manually fix it.
+        curSizeStr = strGetAt(data, pos + 124),
+        // TODO: FORMULA does not support string to integer conversion but we can set it to some values for testing.
+        curSize = -1, //toNatural(curSizeStr),
+        curSize < 0,
+        skipEntry = 1.
+
+    // Rule to read the next block if skipEntry is not set
+    State(inputData, READ, newPos, newOffset) :-
+        state is State(inputData, READ, pos, offset), 
+        // TODO: Here we have to manually fix it.
+        // IntermediateResult(_, skipEntry),
+        // skipEntry = 0, // Only read if skipEntry is not set
+        IntermediateResult("skipEntry", state, 0),
+        canReadMore,
+        newPos = pos + 512, // Change this logic as needed
+        newOffset = offset + 512. // Change this logic as needed
+
+
+    // TODO: Comment out because the the filename is not relevant to what we want to model.
+    // Rule to update intermediate results from current read
+    // IntermediateResult(state, curFileName) :-
+    //     state is State(inputData, READ, pos, offset),
+    //     inputData is InputData(_, data),
+    //     curName = strBefore(data, pos + 100),
+    //     curFileName = strJoin("FileName: ", curName).
+
+    // Rule to set done state
+    State(inputData, DONE, pos, offset) :-
+        inputData is InputData(_, data),
+        State(inputData, READ, pos, offset), 
+        length = strLength(data),
+        pos >= length. // If the end is reached
+}
+
+model m of StringBasedTarParser {
+    inputData is InputData("sample", "123456789").
+}
