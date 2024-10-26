@@ -151,13 +151,11 @@ def extend_formula_core_parser_domain():
         text_formula_documentation.append(page.extract_text())
 
     question = "1. Understand the C code in untar_negsize.c, FORMULA documentation and ParserDSL.4ml. \
-                2. Model untar_negsize.c in FORMULA by modifying the StringBasedParser domain in ParserDSL.4ml. \
-                3. Do not change the existing type definition in StringBasedParser domain such as Status and IntermediateResult. \
-                4. Change at place commented with 'Change the logic if needed' and add more rules if needed. \
-                5. Use strJoin() in FORMULA to concatenate strings. \
-                6. Feel free to replace the `name` parameter with actual variable name in IntermediateResult in the rules. \
-                7. Model `skipEntry` as IntermediateResult in FORMULA and reflect how its value affects the parsing. \
-                8. Model how `skipEntry` is computed from other IntermediateResults or the current read."
+    2. Model untar_negsize.c in FORMULA by extending the `GenericDataParser` domain in ParserDSL.4ml. \
+    3. Do not change the type definition in `GenericDataParser` domain such as Status and IntermediateResult. \
+    4. Use strJoin() in FORMULA to concatenate strings. \
+    5. Model `skipEntry` as IntermediateResult in FORMULA and reflect how its value affects the parsing. \
+    6. Model how `skipEntry` is computed from other IntermediateResults or the current read."
     
     result = ask_chatgpt_interactively(
         text_formula_documentation + [text_formula_parser_core_dsl] + [text_untar_wrong],
