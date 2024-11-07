@@ -50,7 +50,7 @@ def ask_chatgpt(system_contents=[], assistant_contents=[], user_contents=[]):
             messages=messages,
             max_tokens=4096,
             stop=None,
-            temperature=0.7
+            temperature=0.2 # Default is 0.7 and smaller number means less creative
         )
         # pprint(response)
         return response.choices[0].message.content
@@ -142,13 +142,24 @@ def generate_formula_core_parser_domain():
     return result
 
 def extend_formula_core_parser_domain():
-    text_untar_wrong = read_file_into_text("./data/untar_negsize.c")
+    text_untar_wrong = read_file_into_text("./data/untar_bb11946.c")
+    # text_untar_wrong = read_file_into_text("./data/untar_negsize.c")
     text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
     text_formula_parser_core_dsl = read_file_into_text("./formula/ParserDSL.4ml")
     text_formula_documentation = []
     reader = PdfReader("./data/formula.pdf")
     for page in reader.pages:
         text_formula_documentation.append(page.extract_text())
+    
+    # FORMULA is a DSL for high-level modeling and may not be able to catch all details in C code.
+    # Suppose we have a working FORMULA DSL for Tar. How to prove that the DSL in FORMULA is equal to the C code? 
+    # Maybe we don't care but just want to close the loop and find bugs in the C code.
+
+    # Why don't we just use symbolic execution such as KLEE to find bugs in the C code?
+    # Translate from code to code, from C to a low-level language such as prolog.  
+
+    # Write specs in 3D or similar languages that generate a verified parser in F* language.
+    # 3D language may not be able to deal with checksums and is also not supposed to do it in parsing anyway.
 
     question = "1. Understand the C code in untar_negsize.c, FORMULA documentation and ParserDSL.4ml. \
     2. Model untar_negsize.c in FORMULA by extending the `GenericDataParser` domain in ParserDSL.4ml. \
@@ -156,11 +167,19 @@ def extend_formula_core_parser_domain():
     4. Use strJoin() in FORMULA to concatenate strings. \
     5. Model `skipEntry` as IntermediateResult in FORMULA and reflect how its value affects the parsing. \
     6. Model how `skipEntry` is computed from other IntermediateResults or the current read."
+
+    question2 = "1. Understand the C code in untar_bb11946.c, FORMULA documentation and ParserDSL.4ml. \
+    2. Model untar_bb11946.c in FORMULA by extending the `GenericDataParser` domain in ParserDSL.4ml. \
+    3. Do not change the type definition in `GenericDataParser` domain such as Status and IntermediateResult. \
+    4. Use strJoin() in FORMULA to concatenate strings. \
+    5. Use rules with `NextPos`, `NextOffset` and `NextIntermediateResult` to model the main logic in C program\
+    6. Model if-else condition and case switch as FORMULA rules. \
+    7. Model the patterns that may have overread and overflow."
     
     result = ask_chatgpt_interactively(
         text_formula_documentation + [text_formula_parser_core_dsl] + [text_untar_wrong],
         [],
-        [question]
+        [question2]
     )
     return result
 
