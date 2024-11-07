@@ -62,6 +62,9 @@ domain GenericDataParser {
     CanReadMore(state) :- state is State(InputData(_, _, length), _, pos, offset), 
         pos + offset < length.
 
+    // Add more conditions as needed by implementing rules to derive `ContinueCondition` terms
+    ContinueCondition ::= new (context: State).
+
     // Rule to move to done state
     State(inputData, DONE, pos, offset) :-
         inputData is InputData(name, data, length),
@@ -74,10 +77,12 @@ domain GenericDataParser {
     State(initData, INIT, 0, 0) :- initData is InputData(_,_,_). // Change this logic as needed
 
     // Rule to read the next block of data based on the NextPos and NextOffset.
+    // The conditions have to be satisfied in order to proceed to the next state.
     State(inputData, READ, newPos, newOffset) :-
         state is State(inputData, READ, pos, offset),
         NextPos(state, newPos),
         NextOffset(state, newOffset),
+        ContinueCondition(state),
         CanReadMore(state).
     
     // Rule to update intermediate results from current read and other intermediate results.
@@ -104,6 +109,12 @@ domain TinyDemoParser extends GenericDataParser {
         state is State(inputData, _, 0, _), 
         // TODO: This is a temporary workaround for ASCII conversion
         initialCount = asciiAsInt - 48.
+
+    // If the first digit in the header is zero, the program should be terminated immediately
+    ContinueCondition(state) :- state is State(inputData, _, pos, offset), 
+        offset = 1,
+        IntermediateResult("count", state, val),
+        val = 0.
 
     // Initialize the intermediate result "sum" to 0 at the initial state.
     NextIntermediateResult("sum", state, initialSum) :- state is State(inputData, _, 0, _),
