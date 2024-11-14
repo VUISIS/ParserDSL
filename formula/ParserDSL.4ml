@@ -94,6 +94,91 @@ domain GenericDataParser {
         newState = State(inputData, UPDATE, pos, offset).
 }
 
+domain GenericTarParser extends GenericDataParser {
+    // Define constants for tar file types
+    // Use String instead of Enum for simplicity
+    // FileType ::= {PLAIN, LINK, DIRECTORY, SYMLINK, CHARDEV, BLOCKDEV, FIFO, UNKNOWN}.
+
+    // TARFILETYPEOFFSET = 156.
+
+    // Rule to determine file type based on header
+    NextIntermediateResult("directory", state, 0), 
+    NextIntermediateResult("files", state, newFilesVal) :-
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("files", state, filesVal),
+        newFilesVal = filesVal + 1,
+        Byte(inputData, typeByte, pos + 156),
+        typeByte = 77. // ASCII value for 'M'
+
+    NextIntermediateResult("directory", state, 1) :-
+        state is State(inputData, READ, pos, offset),
+        Byte(inputData, typeByte, pos + 156),
+        typeByte = 86. // ASCII value for 'V'
+
+    NextIntermediateResult("directory", state, 0), 
+    NextIntermediateResult("skipEntry", state, 1) :-
+        state is State(inputData, READ, pos, offset),
+        Byte(inputData, typeByte, pos + 156),
+        typeByte = 88. // ASCII value for 'X'
+
+    // Default case for unknown file types
+    NextIntermediateResult("fileType", state, "UNKNOWN") :-
+        state is State(inputData, READ, pos, offset),
+        Byte(inputData, typeByte, pos + 156),
+        typeByte != 77,
+        typeByte != 86,
+        typeByte != 88.
+    
+    NextIntermediateResult("size", state, 1) :-
+        state is State(inputData, READ, pos, offset),
+        // TODO: Start at pos + 156, read the next 12 bytes and combine them to form a size.
+        Byte(inputData, sizeByte, pos + 156),
+        typeByte = 86. 
+
+    NextIntermediateResult("nskip", state, 0) :- 
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("size", state, sizeVal),
+        // TODO: Implement a function to handle `size` to `nskip` conversion.
+        nskipVal = sizeVal.
+
+    // block = fmap_need_off_once_len(*ctx->fmap, pos, BLOCKSIZE, &nread); 
+    // TODO: nread is the actually available data in the block and could be less than 512.
+    NextIntermediateResult("nread", state, 0) :- 
+        state is State(inputData, READ, pos, offset).
+
+    // Rule to handle checksum validation
+    ContinueCondition(state) :- 
+        state is State(inputData, READ, pos, offset),
+        // TODO: Start at pos + 148, read the next 8 bytes and combine them to form a checksum.
+        // TODO: Implement a checksum calculation function that takes the whole block as input.
+        Byte(inputData, checksumByte, pos + 148),
+        checksumByte = 0.
+
+    // Rule to skip entries based on file type
+    ContinueCondition(state) :- 
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("fileType", state, fileType),
+        fileType != "UNKNOWN".
+
+    // Rule to update position and offset for next block
+    // pos will be affected by `nskip` under some conditions. pos += nskip.
+    NextPos(state, newPos) :- state is State(inputData, READ, pos, offset), newPos = pos + offset.
+    NextOffset(state, newOffset) :- state is State(inputData, READ, pos, offset), newOffset = 512.
+
+    // Rule to handle file extraction logic
+    State(inputData, UPDATE, pos, offset) :-
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("fileType", state, fileType),
+        fileType = "PLAIN",
+        // Logic to extract file (simplified)
+        IntermediateResult("extracted", state, "yes").
+
+    // Rule to finalize parsing
+    State(inputData, DONE, pos, offset) :-
+        state is State(inputData, UPDATE, pos, offset),
+        IntermediateResult("extracted", state, "yes").
+}
+
 domain TinyDemoParser extends GenericDataParser {
     // Rule to initialize parsing and read the initial header or meta info.
     State(inputData, READ, pos, offset) :- State(inputData, INIT, 0, 0),
