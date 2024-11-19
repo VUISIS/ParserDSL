@@ -1,0 +1,38 @@
+domain SimpleTarParser
+{
+  Header ::= new (name: Integer, size: Integer).
+  Offset ::= new (name: Integer, pos: Integer).
+  Start  ::= new (name: Integer).
+  Done  ::= new (name: Integer, seq: Integer).
+
+  Done(nextName, 0) :- s is Start(currName), 
+                          currHeader is Header(currName, size),
+                          currOffset is Offset(currName, pos),
+                          nextPos = pos + size + 512,
+                          nextOffset is Offset(nextName, nextPos).
+                          
+  Done(nextName, nextSeq) :- s is Done(currName, seq), nextSeq = seq + 1,
+                          currHeader is Header(currName, size),
+                          currOffset is Offset(currName, pos),
+                          nextPos = pos + size + 512,
+                          nextOffset is Offset(nextName, nextPos).
+
+  badHeader :- h is Header, h.size < 0.
+
+  // Must have exactly one StartHeader
+  tooManyDone :- h is Header, name = h.name,
+                    count({d | d is Done(name, _)}) > 1. 
+  
+  // conforms no tooManyDone, no badHeader.
+}
+
+partial model pm0 of SimpleTarParser
+[solver_RecursionBound = 5]
+{
+  h1 is Header(100, 512).
+  h1Offset is Offset(100, 0).
+  Start(100).
+  
+  h2 is Header(101, x).
+  h2Offset is Offset(101, 1024).
+}

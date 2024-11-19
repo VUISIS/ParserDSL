@@ -1,64 +1,120 @@
-domain StringBasedTarParser {
-    // Define constants for parsing status
-    Status ::= {INIT, READ, UPDATE, DONE}.
+domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
+    // The initial value of in_block is 0.
+    NextIntermediateResult("in_block", state, 0) :- 
+        state is State(inputData, INIT, 0, 0).
 
-    // Data constructor for the initial input data
-    InputData ::= new (name: String, data: String).
+    // Reset in_block to 1 when the size is 0 indicating the end of file is reached and the next blck is header again.
+    NextIntermediateResult("in_block", state, 1) :- 
+        state is State(inputData, _, _, _),
+        IntermediateResult("in_block", state, 0),
+        IntermediateResult("size", state, sizeVal),
+        sizeVal = 0.
 
-    // Data constructor for the parsing context that includes the input data, status, current position, and offset.
-    State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
-
-    // Data constructor for intermediate results that are derived during parsing.
-    // TODO: Fix an type definition error that `name` was skipped when generating the code.
-    IntermediateResult ::= new (name: String, context: State, derivedResult: String + Integer + { NULL }).
-
-    // Derived constants to check parsing conditions
-    canReadMore :- State(InputData(_, data), READ, pos, offset), 
-        length = strLength(data), pos + offset < length.
-
-    isDone :- State(_, DONE, _, _).
-
-    // Rule to initialize the parser with no intermediate results
-    State(initData, INIT, 0, 0) :- initData is InputData(_, data).
-
-    // Rule to initialize the parser
-    State(inputData, READ, pos, offset) :- 
-        inputData is InputData(_, data),
-        State(inputData, INIT, 0, 0),
-        pos = 0,  // Start reading from the beginning
-        offset = 0. // Start with no offset
-
-    // If size is negative, skip the entry
-    IntermediateResult("skipEntry", state, skipEntry) :-
+    // Define constants for tar file types
+    // FileType ::= {PLAIN, LINK, DIRECTORY, SYMLINK, CHARDEV, BLOCKDEV, FIFO, UNKNOWN}.
+    // TARFILETYPEOFFSET = 156.
+    // Rule to determine file type based on header
+    NextIntermediateResult("directory", state, 0), 
+    NextIntermediateResult("files", state, newFilesVal) :-
         state is State(inputData, READ, pos, offset),
-        inputData is InputData(_, data),
-        // TODO: The expression below only reads one character rather than a substring.
-        // curSizeStr = strGetAt(data, pos + 124),
-        // TODO: FORMULA does not support the conversion to integer but we can set it to some values for testing.
-        // toNatural(curSizeStr),
-        curSize = -1,
-        curSize < 0,
-        skipEntry = 1.
+        IntermediateResult("files", state, filesVal),
+        newFilesVal = filesVal + 1,
+        IntermediateResult("in_block", state, inBlockVal),
+        inBlockVal = 0,
+        Byte(inputData, typeByte, pos + 156),
+        typeByte = 77. // ASCII value for 'M'
 
-    // Rule to read the next block if skipEntry is not set
-    State(inputData, READ, newPos, newOffset) :-
-        state is State(inputData, READ, pos, offset), 
-        // TODO: Missing some params in IntermediateResult.
-        // IntermediateResult(_, skipEntry),
-        // skipEntry = 0, // Only read if skipEntry is not set
-        IntermediateResult("skipEntry", state, 0),
-        canReadMore,
-        newPos = pos + 512, // Change this logic as needed
-        newOffset = offset + 512. // Change this logic as needed
+    NextIntermediateResult("directory", state, 1) :-
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("in_block", state, inBlockVal),
+        inBlockVal = 0,
+        Byte(inputData, typeByte, pos + 156),
+        typeByte = 86. // ASCII value for 'V'
 
-    // Rule to set done state
+    NextIntermediateResult("directory", state, 0), 
+    NextIntermediateResult("skipEntry", state, 1) :-
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("in_block", state, inBlockVal),
+        inBlockVal = 0,
+        Byte(inputData, typeByte, pos + 156),
+        typeByte = 88. // ASCII value for 'X'
+
+    // Default case for unknown file types
+    NextIntermediateResult("fileType", state, "UNKNOWN") :-
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("in_block", state, inBlockVal),
+        inBlockVal = 0,
+        Byte(inputData, typeByte, pos + 156),
+        typeByte != 77,
+        typeByte != 86,
+        typeByte != 88.
+    
+    NextIntermediateResult("size", state, 1) :-
+        state is State(inputData, READ, pos, offset),
+        // TODO: Start at pos + 156, read the next 12 bytes and combine them to form a size.
+        Byte(inputData, sizeByte, pos + 156),
+        typeByte = 86. 
+
+    // Increment skipEntry if the size is less than 0.
+    NextIntermediateResult("skipEntry", state, newSkipEntryVal) :-
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("in_block", state, inBlockVal),
+        inBlockVal = 0,
+        IntermediateResult("size", state, sizeVal),
+        sizeVal < 0,
+        IntermediateResult("skipEntry", state, skipEntryVal),
+        newSkipEntryVal = skipEntryVal + 1,
+        Byte(inputData, typeByte, pos + 156),
+        typeByte = 88. // ASCII value for 'X'
+
+    NextIntermediateResult("nskip", state, 0) :- 
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("size", state, sizeVal),
+        // TODO: Implement a function to handle `size` to `nskip` conversion.
+        nskipVal = sizeVal.
+
+    // Model the following code: block = fmap_need_off_once_len(*ctx->fmap, pos, BLOCKSIZE, &nread); 
+    // TODO: nread is the length of remaining data in a block and could be less than 512.
+    NextIntermediateResult("nread", state, nreadVal) :- 
+        state is State(inputData, READ, pos, offset),
+        nreadVal = 512.
+
+    // Rule to handle checksum validation, won't continue if the checksum is not valid.
+    ContinueCondition(state) :- 
+        state is State(inputData, READ, pos, offset),
+        // TODO: Start at pos + 148, read the next 8 bytes and combine them to form a checksum.
+        // TODO: Implement a checksum calculation function that takes the whole block as input.
+        Byte(inputData, checksumByte, pos + 148),
+        checksumByte = 0.
+
+    // Rule to skip entries based on file type
+    ContinueCondition(state) :- 
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("fileType", state, fileType),
+        fileType != "UNKNOWN".
+
+    // Rule to update position and offset for next block
+    // pos will be affected by `nskip` under some conditions. pos += nskip.
+    NextPos(state, newPos) :- state is State(inputData, READ, pos, offset), 
+        IntermediateResult("nskip", state, nskipVal),
+        newPos = pos + offset + nskipVal.
+
+    // It could be less than 512 depending on the value of nread.
+    NextOffset(state, newOffset) :- state is State(inputData, READ, pos, offset), 
+        IntermediateResult("nread", state, nreadVal), 
+        // TODO: Can nreadVal be negative?
+        newOffset = toNatural(nreadVal).
+
+    // Rule to handle file extraction logic
+    State(inputData, UPDATE, pos, offset) :-
+        state is State(inputData, READ, pos, offset),
+        IntermediateResult("fileType", state, fileType),
+        fileType = "PLAIN",
+        // Logic to extract file (simplified)
+        IntermediateResult("extracted", state, "yes").
+
+    // Rule to finalize parsing
     State(inputData, DONE, pos, offset) :-
-        inputData is InputData(_, data),
-        State(inputData, READ, pos, offset), 
-        length = strLength(data),
-        pos >= length. // If the end is reached
-}
-
-model m of StringBasedTarParser {
-    inputData is InputData("sample", "123456789").
+        state is State(inputData, UPDATE, pos, offset),
+        IntermediateResult("extracted", state, "yes").
 }
