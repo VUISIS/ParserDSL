@@ -49,11 +49,11 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
         typeByte != 86,
         typeByte != 88.
     
-    NextIntermediateResult("size", state, 1) :-
+    NextIntermediateResult("size", state, size) :-
         state is State(inputData, READ, pos, offset),
         // TODO: Start at pos + 156, read the next 12 bytes and combine them to form a size.
         Byte(inputData, sizeByte, pos + 156),
-        typeByte = 86. 
+        size = -100. 
 
     // Increment skipEntry if the size is less than 0.
     NextIntermediateResult("skipEntry", state, newSkipEntryVal) :-
@@ -85,7 +85,8 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
         // TODO: Start at pos + 148, read the next 8 bytes and combine them to form a checksum.
         // TODO: Implement a checksum calculation function that takes the whole block as input.
         Byte(inputData, checksumByte, pos + 148),
-        checksumByte = 0.
+        // TODO: Loosen the requirement to simplify the logic or temporarily assume the checksum is valid.
+        checksumByte > 0.
 
     // Rule to skip entries based on file type
     ContinueCondition(state) :- 
@@ -117,4 +118,16 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
     State(inputData, DONE, pos, offset) :-
         state is State(inputData, UPDATE, pos, offset),
         IntermediateResult("extracted", state, "yes").
+}
+
+
+model m of TarParser {
+    initData is InputData("tarfile", "data", 1024).
+}
+
+partial model pm of TarParser
+[solver_RecursionBound = 5]
+{
+    InputData("sample", x, 1000).
+    requires atleast 1000 Byte.
 }
