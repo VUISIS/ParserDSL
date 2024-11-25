@@ -1,0 +1,8 @@
+0. Understand the C code in untar_bb11946.c 
+1. Understand FORMULA documentation and ParserDSL.4ml including an example domain TinyDemoParser.
+2. Model untar_bb11946.c in FORMULA by extending the `GenericDataParser` domain in ParserDSL.4ml.
+3. Do not change the type definition in `GenericDataParser` domain such as Status and IntermediateResult.
+4. Use strJoin() in FORMULA to concatenate strings.
+5. Use rules with `NextPos`, `NextOffset` and `NextIntermediateResult` to model the main logic in C program
+6. Model if-else condition and case switch as FORMULA rules using ContinueCondition.
+7. Model the patterns that may have overread and overflow."

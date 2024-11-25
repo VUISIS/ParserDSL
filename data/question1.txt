@@ -1,0 +1,6 @@
+1. Understand the C code in untar_negsize.c, FORMULA documentation and ParserDSL.4ml. 
+2. Model untar_negsize.c in FORMULA by extending the `GenericDataParser` domain in ParserDSL.4ml. 
+3. Do not change the type definition in `GenericDataParser` domain such as Status and IntermediateResult.
+4. Use strJoin() in FORMULA to concatenate strings.
+5. Model `skipEntry` as IntermediateResult in FORMULA and reflect how its value affects the parsing.
+6. Model how `skipEntry` is computed from other IntermediateResults or the current read.

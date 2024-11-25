@@ -141,7 +141,7 @@ def generate_formula_core_parser_domain():
     )
     return result
 
-def extend_formula_core_parser_domain():
+def extend_formula_core_parser_domain(question):
     text_untar_wrong = read_file_into_text("./data/untar_bb11946.c")
     # text_untar_wrong = read_file_into_text("./data/untar_negsize.c")
     text_formula_simple_documentation = read_file_into_text("./data/formula.txt")
@@ -161,25 +161,10 @@ def extend_formula_core_parser_domain():
     # Write specs in 3D or similar languages that generate a verified parser in F* language.
     # 3D language may not be able to deal with checksums and is also not supposed to do it in parsing anyway.
 
-    question = "1. Understand the C code in untar_negsize.c, FORMULA documentation and ParserDSL.4ml. \
-    2. Model untar_negsize.c in FORMULA by extending the `GenericDataParser` domain in ParserDSL.4ml. \
-    3. Do not change the type definition in `GenericDataParser` domain such as Status and IntermediateResult. \
-    4. Use strJoin() in FORMULA to concatenate strings. \
-    5. Model `skipEntry` as IntermediateResult in FORMULA and reflect how its value affects the parsing. \
-    6. Model how `skipEntry` is computed from other IntermediateResults or the current read."
-
-    question2 = "1. Understand the C code in untar_bb11946.c, FORMULA documentation and ParserDSL.4ml. \
-    2. Model untar_bb11946.c in FORMULA by extending the `GenericDataParser` domain in ParserDSL.4ml. \
-    3. Do not change the type definition in `GenericDataParser` domain such as Status and IntermediateResult. \
-    4. Use strJoin() in FORMULA to concatenate strings. \
-    5. Use rules with `NextPos`, `NextOffset` and `NextIntermediateResult` to model the main logic in C program\
-    6. Model if-else condition and case switch as FORMULA rules. \
-    7. Model the patterns that may have overread and overflow."
-    
     result = ask_chatgpt_interactively(
         text_formula_documentation + [text_formula_parser_core_dsl] + [text_untar_wrong],
         [],
-        [question2]
+        [question]
     )
     return result
 
@@ -330,6 +315,7 @@ def create_formula_parser_domain(text_3d_lang_specs, text_untar_latest):
 if __name__ == "__main__":
     text_3d_lang_specs = read_file_into_text("./data/3d-lang.rst")
     text_untar_latest = read_file_into_text("./data/untar.c")
+    question = read_file_into_text("./data/question1.txt")
 
     # result = test_gpt_interactively()
 
@@ -343,7 +329,7 @@ if __name__ == "__main__":
     # result = untar_code_extraction_interactively()
     # result = generate_formula_core_parser_domain()
 
-    result = extend_formula_core_parser_domain()
+    result = extend_formula_core_parser_domain(question)
 
     print(result)
 
