@@ -3,10 +3,17 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
     NextIntermediateResult("in_block", state, 0) :- 
         state is State(inputData, INIT, 0, 0).
 
-    // Reset in_block to 1 when the size is 0 indicating the end of file is reached and the next blck is header again.
+    // Set `in_block` to 1 at the end of reading the header block if not interrupted.
     NextIntermediateResult("in_block", state, 1) :- 
         state is State(inputData, _, _, _),
         IntermediateResult("in_block", state, 0),
+        IntermediateResult("size", state, sizeVal),
+        sizeVal = 0.
+
+    // Reset `in_block` to 0 when the size is 0 indicating the end of file is reached and the next block is header again.
+    NextIntermediateResult("in_block", state, 0) :- 
+        state is State(inputData, _, _, _),
+        IntermediateResult("in_block", state, 1),
         IntermediateResult("size", state, sizeVal),
         sizeVal = 0.
 
@@ -94,7 +101,7 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
 
     // Rule to handle checksum validation, won't continue if the checksum is not valid.
     ContinueCondition(state) :- 
-        state is State(inputData, READ, pos, offset),
+        state is State(inputData, _, pos, offset),
         // TODO: Start at pos + 148, read the next 8 bytes and combine them to form a checksum.
         // TODO: Implement a checksum calculation function that takes the whole block as input.
         Byte(inputData, checksumByte, pos + 148),
@@ -103,7 +110,7 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
 
     // Rule to skip entries based on file type
     ContinueCondition(state) :- 
-        state is State(inputData, READ, pos, offset),
+        state is State(inputData, _, pos, offset),
         IntermediateResult("fileType", state, fileType),
         fileType != "UNKNOWN".
 
@@ -144,6 +151,7 @@ model m of TarParser {
 partial model pm of TarParser
 [solver_RecursionBound = 5]
 {
-    InputData("sample", x, 10000).
+    inputData is InputData("sample", x, 10000).
+    initState is State(inputData, INIT, 0, 0).
     requires atleast 10000 Byte.
 }

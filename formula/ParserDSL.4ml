@@ -10,6 +10,7 @@ domain GenericDataParser {
 
     // Parsing state that the includes the input data, status, current position, and offset.
     State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
+    Transition ::= new (from: State, to: State).
 
     // Intermediate results that are derived during parsing and the derived result could have my types.
     IntermediateResult ::= new (name: String, context: State, derivedResult: String + Integer + { NULL }).
@@ -19,12 +20,20 @@ domain GenericDataParser {
     NextPos ::= new (context: State, pos: Integer).
     NextIntermediateResult ::= new (var: String, context: State, result: String + Integer + { NULL }).
 
+    // The index starts from 0 and the length is the total number of bytes in the input data.
+    OverRead ::= new (context: State).
+    OverRead(State(inputData, UPDATE, pos, offset)) :- OverRead(State(inputData, READ, pos, offset)).
+    OverRead(state) :- state is State(InputData(_, _, length), _, pos, offset), 
+        pos + offset >= length.
+
     CanReadMore ::= new (context: State).
+    CanReadMore(State(inputData, UPDATE, pos, offset)) :- CanReadMore(State(inputData, READ, pos, offset)).
     CanReadMore(state) :- state is State(InputData(_, _, length), _, pos, offset), 
         pos + offset < length.
 
     // Add more conditions as needed by implementing rules to derive `ContinueCondition` terms
     ContinueCondition ::= new (context: State).
+    ContinueCondition(State(inputData, UPDATE, pos, offset)) :- ContinueCondition(State(inputData, READ, pos, offset)).
 
     // Rule to move to done state
     State(inputData, DONE, pos, offset) :-
@@ -37,22 +46,25 @@ domain GenericDataParser {
     // Rule to initialize the parser with no intermediate results, but you can add them as needed.
     State(initData, INIT, 0, 0) :- initData is InputData(_,_,_). // Change this logic as needed
 
-    // Rule to read the next block of data based on the NextPos and NextOffset.
+    // Rule to read the next block of data based on the implementation of NextPos() and NextOffset().
+    // The new state could be derived from a state with INIT, READ or UPDATE status.
     // The conditions have to be satisfied in order to proceed to the next state.
-    State(inputData, READ, newPos, newOffset) :-
-        state is State(inputData, READ, pos, offset),
-        NextPos(state, newPos),
-        NextOffset(state, newOffset),
-        ContinueCondition(state),
-        CanReadMore(state).
+    // Add Transition() to bind the old state and new state.
+    Transition(oldState, State(inputData, READ, newPos, newOffset)) :-
+        oldState is State(inputData, _, pos, offset),
+        NextPos(oldState, newPos),
+        NextOffset(oldState, newOffset),
+        ContinueCondition(oldState),
+        CanReadMore(oldState).
     
     // Rule to update intermediate results from current read and other intermediate results.
     // The new status is changed from READ to UPDATE while keeping other parameters the same.
+    // A new state is implicitly created inside IntermediateResult().
     IntermediateResult(name, newState, newDerivedResult) :-
-        state is State(inputData, READ, pos, offset), 
-        IntermediateResult(name, state, derivedResult),
-        NextIntermediateResult(name, newState, newDerivedResult),
+        oldState is State(inputData, READ, pos, offset), 
+        NextIntermediateResult(name, oldState, newDerivedResult),
         newState = State(inputData, UPDATE, pos, offset).
+
 }
 
 domain TinyDemoParser extends GenericDataParser {
