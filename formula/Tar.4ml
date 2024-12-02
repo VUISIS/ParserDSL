@@ -1,17 +1,17 @@
 domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
     // The initial value of in_block is 0.
-    NextIntermediateResult("in_block", state, 0) :- 
+    IntermediateResult("in_block", state, 0) :- 
         state is State(inputData, INIT, 0, 0).
 
     // Set `in_block` to 1 at the end of reading the header block if not interrupted.
-    NextIntermediateResult("in_block", state, 1) :- 
+    IntermediateResult("in_block", state, 1) :- 
         state is State(inputData, _, _, _),
         IntermediateResult("in_block", state, 0),
         IntermediateResult("size", state, sizeVal),
         sizeVal = 0.
 
     // Reset `in_block` to 0 when the size is 0 indicating the end of file is reached and the next block is header again.
-    NextIntermediateResult("in_block", state, 0) :- 
+    IntermediateResult("in_block", state, 0) :- 
         state is State(inputData, _, _, _),
         IntermediateResult("in_block", state, 1),
         IntermediateResult("size", state, sizeVal),
@@ -21,8 +21,8 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
     // FileType ::= {PLAIN, LINK, DIRECTORY, SYMLINK, CHARDEV, BLOCKDEV, FIFO, UNKNOWN}.
     // TARFILETYPEOFFSET = 156.
     // Rule to determine file type based on header
-    NextIntermediateResult("directory", state, 0), 
-    NextIntermediateResult("files", state, newFilesVal) :-
+    IntermediateResult("directory", state, 0), 
+    IntermediateResult("files", state, newFilesVal) :-
         state is State(inputData, READ, pos, offset),
         IntermediateResult("files", state, filesVal),
         newFilesVal = filesVal + 1,
@@ -31,15 +31,15 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
         Byte(inputData, typeByte, pos + 156),
         typeByte = 77. // ASCII value for 'M'
 
-    NextIntermediateResult("directory", state, 1) :-
+    IntermediateResult("directory", state, 1) :-
         state is State(inputData, READ, pos, offset),
         IntermediateResult("in_block", state, inBlockVal),
         inBlockVal = 0,
         Byte(inputData, typeByte, pos + 156),
         typeByte = 86. // ASCII value for 'V'
 
-    NextIntermediateResult("directory", state, 0), 
-    NextIntermediateResult("skipEntry", state, 1) :-
+    IntermediateResult("directory", state, 0), 
+    IntermediateResult("skipEntry", state, 1) :-
         state is State(inputData, READ, pos, offset),
         IntermediateResult("in_block", state, inBlockVal),
         inBlockVal = 0,
@@ -47,7 +47,7 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
         typeByte = 88. // ASCII value for 'X'
 
     // Default case for unknown file types
-    NextIntermediateResult("fileType", state, "UNKNOWN") :-
+    IntermediateResult("fileType", state, "UNKNOWN") :-
         state is State(inputData, READ, pos, offset),
         IntermediateResult("in_block", state, inBlockVal),
         inBlockVal = 0,
@@ -56,15 +56,24 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
         typeByte != 86,
         typeByte != 88.
     
-    NextIntermediateResult("size", state, size) :-
-        state is State(inputData, READ, pos, offset),
+    IntermediateResult("size", state, sizeVal) :-
+        state is State(inputData, _, pos, offset),
         // TODO: Start at pos + 156, read the next 12 bytes and combine them to form a size.
-        Byte(inputData, sizeByte, pos + 156),
+        Byte(inputData, b1, pos + 156),
+        Byte(inputData, b2, pos + 157),
+        Byte(inputData, b3, pos + 158),
         // TODO: temporarily set it to a negative value or positive value for testing.
-        size = 100.
+        //sizeVal = 1000.
+        sizeVal = b1*b2*b3.
+
+    IntermediateResult("nskip", state, nskipVal) :- 
+        state is State(inputData, _, pos, offset),
+        IntermediateResult("size", state, sizeVal),
+        // TODO: Implement a function to handle `size` to `nskip` conversion.
+        nskipVal = sizeVal.
 
     // Increment skipEntry if the size is less than 0.
-    NextIntermediateResult("skipEntry", state, newSkipEntryVal) :-
+    IntermediateResult("skipEntry", state, newSkipEntryVal) :-
         state is State(inputData, READ, pos, offset),
         IntermediateResult("in_block", state, inBlockVal),
         inBlockVal = 0,
@@ -75,28 +84,22 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
         Byte(inputData, typeByte, pos + 156),
         typeByte = 88. // ASCII value for 'X'
 
-    NextIntermediateResult("nskip", state, 0) :- 
-        state is State(inputData, READ, pos, offset),
-        IntermediateResult("size", state, sizeVal),
-        // TODO: Implement a function to handle `size` to `nskip` conversion.
-        nskipVal = sizeVal.
-
     // TODO: Model the following code: block = fmap_need_off_once_len(*ctx->fmap, pos, BLOCKSIZE, &nread); 
     // TODO: nread is the length of remaining data in a block and could be less than 512.
-    NextIntermediateResult("nread", state, nreadVal) :- 
+    IntermediateResult("nread", state, nreadVal) :- 
         inputData is InputData(_, _, length),
-        state is State(inputData, READ, pos, offset),
+        state is State(inputData, _, pos, offset),
         pos + offset < length,
         nreadVal = 512.
 
-    NextIntermediateResult("nread", state, nreadVal) :- 
+    IntermediateResult("nread", state, nreadVal) :- 
         inputData is InputData(_, _, length),
-        state is State(inputData, READ, pos, offset),
+        state is State(inputData, _, pos, offset),
         pos + offset >= length,
         nreadVal = (pos + offset) % 512.
 
     // Not all overreads are errors, some are expected.
-    hasOverRead :- OverRead(state). 
+    hasOverRead :- OverRead(state).
 
     // Rule to handle checksum validation, won't continue if the checksum is not valid.
     //ContinueCondition(state) :- 
@@ -112,26 +115,30 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
         //state is State(inputData, _, pos, offset),
         //IntermediateResult("fileType", state, fileType),
         //fileType != "UNKNOWN".
+    
+    ContinueCondition(state) :- CanReadMore(state).
 
     // Rule to update position and offset for next block
     // pos will be affected by `nskip` under some conditions. pos += nskip.
     NextPos(state, newPos) :- 
         state is State(inputData, _, pos, offset), 
-        //newPos = 1.
+        //newPos = pos + 100.
         IntermediateResult("nskip", state, nskipVal),
         newPos = pos + offset + nskipVal.
 
     // It could be less than 512 depending on the value of nread.
     NextOffset(state, newOffset) :- 
         state is State(inputData, _, pos, offset), 
-        // newOffset = 1.
-        IntermediateResult("nread", state, nreadVal), 
+        newOffset = 512.
+        //IntermediateResult("nread", state, nreadVal), 
         // TODO: Can nreadVal be negative?
-        newOffset = toNatural(nreadVal).
+        //newOffset = toNatural(nreadVal).
 }
 
 // Commands for symbolic execution of a partial TarParser model.
-// solve pm 1 isDone
+// 1. Find a model that `isDone` condition cannot be satisfied.
+// solve pm 1 no isDone
+// 2. Find a model that has overread.
 // solve pm 1 overread
 partial model tpm of TarParser
 [solver_RecursionBound = 5]
@@ -162,9 +169,4 @@ partial model tpm of TarParser
     Byte(inputData,b9,8),
     Byte(inputData,b10,9), 
     Byte(inputData,b11,10).
-}
-
-model tm of TarParser {
-    initData is InputData("tarfile", "data", 1024).
-    initState is State(inputData, INIT, 0, 0).
 }

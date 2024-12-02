@@ -18,10 +18,9 @@ domain GenericDataParser {
     // Intermediate results that are derived during parsing and the derived result could have my types.
     IntermediateResult ::= new (name: String, context: State, derivedResult: String + Integer + { NULL }).
 
-    // Decide the new offset, pos and intermediate result based on current state.
+    // Decide the new offset and pos based on current state.
     NextOffset ::= new (context: State, offset: Integer).
     NextPos ::= new (context: State, pos: Integer).
-    NextIntermediateResult ::= new (var: String, context: State, result: String + Integer + { NULL }).
 
     // The index starts from 0 and the length is the total number of bytes in the input data.
     OverRead ::= new (context: State).
@@ -53,20 +52,13 @@ domain GenericDataParser {
     // The new state could be derived from a state with INIT, READ or UPDATE status.
     // The conditions have to be satisfied in order to proceed to the next state.
     // Add Transition() to bind the old state and new state.
+    State(inputData, READ, newPos, newOffset),
     Transition(oldState, State(inputData, READ, newPos, newOffset)) :-
         oldState is State(inputData, _, pos, offset),
         NextPos(oldState, newPos),
-        NextOffset(oldState, newOffset).
-        //ContinueCondition(oldState).
+        NextOffset(oldState, newOffset),
+        ContinueCondition(oldState).
     
-    // Rule to update intermediate results from current read and other intermediate results.
-    // The new status is changed from READ to UPDATE while keeping other parameters the same.
-    // A new state is implicitly created inside IntermediateResult().
-    IntermediateResult(name, newState, newDerivedResult) :-
-        oldState is State(inputData, READ, pos, offset), 
-        NextIntermediateResult(name, oldState, newDerivedResult),
-        newState = State(inputData, UPDATE, pos, offset).
-
 }
 
 domain TinyDemoParser extends GenericDataParser {
@@ -79,7 +71,7 @@ domain TinyDemoParser extends GenericDataParser {
     NextOffset(state, newOffset) :- state is State(_, _, 0, _), newOffset = 1. 
 
     // Initialize the intermediate result "count" to the number in the first byte at the initial state.
-    NextIntermediateResult("count", state, initialCount) :-
+    IntermediateResult("count", state, initialCount) :-
         Byte(inputData, asciiAsInt, 0),
         state is State(inputData, _, 0, _), 
         // TODO: This is a temporary workaround for ASCII conversion
@@ -92,7 +84,7 @@ domain TinyDemoParser extends GenericDataParser {
         val = 0.
 
     // Initialize the intermediate result "sum" to 0 at the initial state.
-    NextIntermediateResult("sum", state, initialSum) :- state is State(inputData, _, 0, _),
+    IntermediateResult("sum", state, initialSum) :- state is State(inputData, _, 0, _),
         initialSum = 0.
 
     // Decide how many bytes to read next after the header is read.
@@ -103,7 +95,7 @@ domain TinyDemoParser extends GenericDataParser {
         
     // Update the intermediate result "sum" with a new number extracted and added.
     // ASCII 35 is '#' and should be skipped.
-    NextIntermediateResult("sum", newState, newSum) :- 
+    IntermediateResult("sum", newState, newSum) :- 
         oldState is State(inputData, READ, pos, offset),
         newState is State(inputData, UPDATE, pos, offset),
         pos > 0,
@@ -147,6 +139,9 @@ partial model pm of GenericDataParser
 {
     inputData is InputData("sample", x, 2000).
 
+    // Byte(inputData,51,0).
+    // requires atleast 10 Byte.
+
     Byte(inputData,b1,0), 
     Byte(inputData,b2,1), 
     Byte(inputData,b3,2), 
@@ -158,6 +153,4 @@ partial model pm of GenericDataParser
     Byte(inputData,b9,8),
     Byte(inputData,b10,9), 
     Byte(inputData,b11,10).
-    //Byte(inputData,51,0).
-    //requires atleast 10 Byte.
 }
