@@ -95,63 +95,76 @@ domain TarParser extends GenericDataParser at "ParserDSL.4ml" {
         pos + offset >= length,
         nreadVal = (pos + offset) % 512.
 
-    overread :- 
-        IntermediateResult("nread", state, nreadVal),
-        nreadVal < 512.
+    // Not all overreads are errors, some are expected.
+    hasOverRead :- OverRead(state). 
 
     // Rule to handle checksum validation, won't continue if the checksum is not valid.
-    ContinueCondition(state) :- 
-        state is State(inputData, _, pos, offset),
+    //ContinueCondition(state) :- 
+        //state is State(inputData, _, pos, offset),
         // TODO: Start at pos + 148, read the next 8 bytes and combine them to form a checksum.
         // TODO: Implement a checksum calculation function that takes the whole block as input.
-        Byte(inputData, checksumByte, pos + 148),
+        //Byte(inputData, checksumByte, pos + 148),
         // TODO: Loosen the requirement to simplify the logic or temporarily assume the checksum is valid.
-        checksumByte > 0.
+        //checksumByte > 0.
 
     // Rule to skip entries based on file type
-    ContinueCondition(state) :- 
-        state is State(inputData, _, pos, offset),
-        IntermediateResult("fileType", state, fileType),
-        fileType != "UNKNOWN".
+    //ContinueCondition(state) :- 
+        //state is State(inputData, _, pos, offset),
+        //IntermediateResult("fileType", state, fileType),
+        //fileType != "UNKNOWN".
 
     // Rule to update position and offset for next block
     // pos will be affected by `nskip` under some conditions. pos += nskip.
-    NextPos(state, newPos) :- state is State(inputData, READ, pos, offset), 
+    NextPos(state, newPos) :- 
+        state is State(inputData, _, pos, offset), 
+        //newPos = 1.
         IntermediateResult("nskip", state, nskipVal),
         newPos = pos + offset + nskipVal.
 
     // It could be less than 512 depending on the value of nread.
-    NextOffset(state, newOffset) :- state is State(inputData, READ, pos, offset), 
+    NextOffset(state, newOffset) :- 
+        state is State(inputData, _, pos, offset), 
+        // newOffset = 1.
         IntermediateResult("nread", state, nreadVal), 
         // TODO: Can nreadVal be negative?
         newOffset = toNatural(nreadVal).
-
-    // Rule to handle file extraction logic
-    State(inputData, UPDATE, pos, offset) :-
-        state is State(inputData, READ, pos, offset),
-        IntermediateResult("fileType", state, fileType),
-        fileType = "PLAIN",
-        // Logic to extract file (simplified)
-        IntermediateResult("extracted", state, "yes").
-
-    // Rule to finalize parsing
-    State(inputData, DONE, pos, offset) :-
-        state is State(inputData, UPDATE, pos, offset),
-        IntermediateResult("extracted", state, "yes").
-}
-
-
-model m of TarParser {
-    initData is InputData("tarfile", "data", 1024).
 }
 
 // Commands for symbolic execution of a partial TarParser model.
 // solve pm 1 isDone
 // solve pm 1 overread
-partial model pm of TarParser
+partial model tpm of TarParser
 [solver_RecursionBound = 5]
 {
     inputData is InputData("sample", x, 10000).
     initState is State(inputData, INIT, 0, 0).
-    requires atleast 10000 Byte.
+
+    // TODO: Does not work unless you explicitly specify all partial terms.
+    // requires atleast 10000 Byte.
+    // requires atleast 100 NextPos.
+    // requires atleast 100 NextOffset.
+
+    NextPos(s1, p1),
+    NextOffset(s1, o1),
+    NextPos(s2, p2),
+    NextOffset(s2, o2),
+    NextPos(s3, p3),
+    NextOffset(s3, o3).
+
+    Byte(inputData,b1,0), 
+    Byte(inputData,b2,1), 
+    Byte(inputData,b3,2), 
+    Byte(inputData,b4,3), 
+    Byte(inputData,b5,4),
+    Byte(inputData,b6,5),
+    Byte(inputData,b7,6), 
+    Byte(inputData,b8,7), 
+    Byte(inputData,b9,8),
+    Byte(inputData,b10,9), 
+    Byte(inputData,b11,10).
+}
+
+model tm of TarParser {
+    initData is InputData("tarfile", "data", 1024).
+    initState is State(inputData, INIT, 0, 0).
 }

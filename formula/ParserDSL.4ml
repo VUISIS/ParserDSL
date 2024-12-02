@@ -4,9 +4,12 @@ domain GenericDataParser {
     Status ::= {INIT, READ, UPDATE, TERMINATE, DONE}.
 
     // A byte represented as an integer in the range of 0-255 and its location in the input data.
-    Byte ::= new (input: InputData, val: Natural, pos: Integer).
+    Byte ::= new (input: InputData, val: Integer, pos: Integer).
+    
     // Input data are bytes represented as a list of Byte.
     InputData ::= new (name: String, data: String, length: Integer).
+
+    conforms Byte(inputData, val, pos), inputData is InputData(_, data, length), pos >= 0, pos < length.
 
     // Parsing state that the includes the input data, status, current position, and offset.
     State ::= new (inputData: InputData, status: Status, curPos: Integer, offset: Integer).
@@ -38,7 +41,7 @@ domain GenericDataParser {
     // Rule to move to done state
     State(inputData, DONE, pos, offset) :-
         inputData is InputData(name, data, length),
-        State(inputData, READ, pos, offset), 
+        State(inputData, _, pos, offset), 
         offset + pos >= length.
 
     isDone :- State(_, DONE, _, _).
@@ -53,9 +56,8 @@ domain GenericDataParser {
     Transition(oldState, State(inputData, READ, newPos, newOffset)) :-
         oldState is State(inputData, _, pos, offset),
         NextPos(oldState, newPos),
-        NextOffset(oldState, newOffset),
-        ContinueCondition(oldState),
-        CanReadMore(oldState).
+        NextOffset(oldState, newOffset).
+        //ContinueCondition(oldState).
     
     // Rule to update intermediate results from current read and other intermediate results.
     // The new status is changed from READ to UPDATE while keeping other parameters the same.
@@ -143,6 +145,19 @@ model m of TinyDemoParser {
 partial model pm of GenericDataParser
 [solver_RecursionBound = 5]
 {
-    InputData("sample", x, 100).
-    requires atleast 200 Byte.
+    inputData is InputData("sample", x, 2000).
+
+    Byte(inputData,b1,0), 
+    Byte(inputData,b2,1), 
+    Byte(inputData,b3,2), 
+    Byte(inputData,b4,3), 
+    Byte(inputData,b5,4),
+    Byte(inputData,b6,5),
+    Byte(inputData,b7,6), 
+    Byte(inputData,b8,7), 
+    Byte(inputData,b9,8),
+    Byte(inputData,b10,9), 
+    Byte(inputData,b11,10).
+    //Byte(inputData,51,0).
+    //requires atleast 10 Byte.
 }
